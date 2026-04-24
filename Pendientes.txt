@@ -1,0 +1,5 @@
+Desinatalar la plantilla y corregir esto:
+The build process (npm run build) was failing because src/contexts/AuthContext.tsx was attempting to import types from a non-existent file: ../types/dto.
+I created the src/types/dto.ts file with appropriate UserResponseDto and AuthResponseDto interfaces to satisfy the compiler.
+
+y volver a instalar

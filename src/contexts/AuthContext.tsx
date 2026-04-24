@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState } from 'react';
 import { authService } from '../services/auth.service';
 import type { UserResponseDto } from '../types/dto';
 
@@ -22,24 +23,23 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [user, setUser] = useState<UserResponseDto | null>(null);
-    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-    const [refreshToken, setRefreshToken] = useState<string | null>(localStorage.getItem('refreshToken'));
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (token) {
-            const userLocal = localStorage.getItem('user');
-            if (userLocal) {
-                try {
-                    setUser(JSON.parse(userLocal));
-                } catch (error) {
-                    console.error("Error parsing user from localStorage", error);
-                }
+    const [user, setUser] = useState<UserResponseDto | null>(() => {
+        const userLocal = localStorage.getItem('user');
+        if (userLocal) {
+            try {
+                return JSON.parse(userLocal);
+            } catch (error) {
+                console.error("Error parsing user from localStorage", error);
+                return null;
             }
         }
-        setLoading(false);
-    }, [token]);
+        return null;
+    });
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+    const [refreshToken, setRefreshToken] = useState<string | null>(() => localStorage.getItem('refreshToken'));
+    const loading = false;
+
+    // Hydration is now synchronous in the useState initializer.
 
     const login = (newToken: string, newRefreshToken: string, userData: UserResponseDto) => {
         localStorage.setItem('token', newToken);
