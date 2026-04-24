@@ -1,32 +1,31 @@
 {
     "$schema": "http://json.schemastore.org/template",
     "author": "Ing Ramon Montoya R",
-    "defaultName": "MAUI_SQLite",
+    "defaultName": "rmReactViteApp",
     "repository": {
         "url": "https://github.com/",
         "type": "GitHub"
     },
     "projectURL": "https://github.com/",
-    "releaseNotes": "Template for MAUI_SQLite",
-    "classifications": ["MAUI", "Android",  "Windows", "Mobile"],
-    "identity": "rmrMAUI.MAUI_SQLite.Basics",
-    "name": "rmMAUI_SQLite",
-    "shortName": "MAUI_SQLite",
-    "sourceName": "MauiApp1",
+    "releaseNotes": "Template for ReactJS with TypeScript, TailwindCSS, and Vite.",
+    "classifications": ["Web", "React", "TypeScript", "TailwindCSS", "Vite"],
+    "identity": "rmr.ReactJS.Ts.TailwindCSS.Template",
+    "name": "rmReactJS_Ts_TailwindCSS_Template",
+    "shortName": "rm-react-ts",
+    "sourceName": "rmReactJS_Ts_TailwindCSS",
     "tags": {
-        "language": "C#",
+        "language": "TypeScript",
         "type": "project"
     },
     "preferNameDirectory": true,
     "primaryOutputs": [
-        { "path": "MauiApp1.csproj" }
+        { "path": "rmreactjs_ts_tailwindcss.esproj" }
     ],
     "symbols": {
         "RootNamespace": {
             "type": "parameter",
-            "defaultValue": "MauiApp1",
-            "replaces": "MauiApp1"
+            "defaultValue": "rmReactJS_Ts_TailwindCSS",
+            "replaces": "rmReactJS_Ts_TailwindCSS"
         }
     }
 }
-
