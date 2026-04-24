@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="rmreactjs_ts_tailwindcss.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+</Solution>
