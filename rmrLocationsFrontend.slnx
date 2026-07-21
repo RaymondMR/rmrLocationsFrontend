@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="rmrlocationsfrontend.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+</Solution>

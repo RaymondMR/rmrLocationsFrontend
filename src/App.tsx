@@ -1,125 +1,102 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { useAuthStore } from "@/stores/auth-store";
+import { refreshAccessToken } from "@/lib/refresh-token";
+import AppShell from "@/components/layout/AppShell";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
-function App() {
-  const [count, setCount] = useState(0)
+// Pages (lazy loaded in production, eager for now)
+import HomePage from "@/pages/HomePage";
+import LoginPage from "@/pages/LoginPage";
+import RegisterPage from "@/pages/RegisterPage";
+import LocationsPage from "@/pages/LocationsPage";
+import LocationDetailPage from "@/pages/LocationDetailPage";
+import LocationNewPage from "@/pages/LocationNewPage";
+import LocationEditPage from "@/pages/LocationEditPage";
+import CategoriesPage from "@/pages/CategoriesPage";
+import CategoryDetailPage from "@/pages/CategoryDetailPage";
+import TagsPage from "@/pages/TagsPage";
+import TagDetailPage from "@/pages/TagDetailPage";
+import CollectionsPage from "@/pages/CollectionsPage";
+import CollectionDetailPage from "@/pages/CollectionDetailPage";
+import ProfilePage from "@/pages/ProfilePage";
+import AdminDashboardPage from "@/pages/AdminDashboardPage";
+import NotFoundPage from "@/pages/NotFoundPage";
+import ContactPage from "@/pages/ContactPage";
+
+export default function App() {
+  const status = useAuthStore((s) => s.status);
+
+  useEffect(() => {
+    // Bootstrap session: try to refresh token on mount
+    const rt = localStorage.getItem("rmr.refreshToken");
+    const uid = localStorage.getItem("rmr.userId");
+    if (rt && uid) {
+      refreshAccessToken().finally(() => {
+        const store = useAuthStore.getState();
+        if (store.status === "loading") {
+          store.logout();
+        }
+      });
+    }
+  }, []);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-        <div className="mt-8 p-4 bg-linear-to-r from-purple-500 to-pink-500 rounded-lg shadow-lg text-white font-bold">
-          Tailwind CSS v4 is configured and working!
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <Routes>
+      <Route element={<AppShell />}>
+        <Route index element={<HomePage />} />
+        <Route path="login" element={<LoginPage />} />
+        <Route path="register" element={<RegisterPage />} />
+        <Route path="locations" element={<LocationsPage />} />
+        <Route path="locations/:id" element={<LocationDetailPage />} />
+        <Route
+          path="locations/new"
+          element={
+            <ProtectedRoute>
+              <LocationNewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="locations/:id/edit"
+          element={
+            <ProtectedRoute>
+              <LocationEditPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="categories" element={<CategoriesPage />} />
+        <Route path="categories/:id" element={<CategoryDetailPage />} />
+        <Route path="tags" element={<TagsPage />} />
+        <Route path="tags/:id" element={<TagDetailPage />} />
+        <Route
+          path="collections"
+          element={
+            <ProtectedRoute>
+              <CollectionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="collections/:id" element={<CollectionDetailPage />} />
+        <Route
+          path="profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="admin"
+          element={
+            <ProtectedRoute role="Admin">
+              <AdminDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="contact" element={<ContactPage />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Route>
+    </Routes>
+  );
 }
-
-export default App

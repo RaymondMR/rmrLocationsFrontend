@@ -3,3 +3,5 @@ The build process (npm run build) was failing because src/contexts/AuthContext.t
 I created the src/types/dto.ts file with appropriate UserResponseDto and AuthResponseDto interfaces to satisfy the compiler.
 
 y volver a instalar
+
+antigravity.google/docs/skills
