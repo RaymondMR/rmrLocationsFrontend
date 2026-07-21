@@ -43,3 +43,9 @@ coverage/
 .claude/cache/
 .claude/projects/
 .claude/session-data/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
