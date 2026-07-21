@@ -18,7 +18,7 @@ interface AuthState {
 
   setTokens: (access: string, refresh: string) => void;
   logout: () => void;
-  bootstrap: () => void;
+  bootstrap: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -56,13 +56,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  bootstrap: () => {
+  // Resuelve el estado inicial "loading". DEBE llamarse una vez al arrancar la app
+  // (ver main.tsx): mientras status siga en "loading", LoginPage y RegisterPage
+  // muestran un esqueleto y no llegan a pintar sus formularios.
+  //
+  // La versión anterior dejaba status en "loading" cuando había sesión guardada,
+  // confiando en que "se refrescaría en la primera llamada a la API". Nada disparaba
+  // ese refresco, así que el estado no salía nunca de ahí.
+  bootstrap: async () => {
     const { refreshToken, userId } = get();
-    if (refreshToken && userId) {
-      // Will try to refresh on first API call
-      set({ status: "loading" });
-    } else {
+
+    if (!refreshToken || !userId) {
       set({ status: "anonymous" });
+      return;
     }
+
+    // Import dinámico para romper el ciclo auth-store → refresh-token → axios →
+    // auth-store. Al diferirse hasta la llamada, los módulos ya están inicializados.
+    const { refreshAccessToken } = await import("@/lib/refresh-token");
+
+    // Siempre termina en un estado terminal: setTokens() deja "authenticated",
+    // logout() deja "anonymous". No hace falta tocar status aquí.
+    await refreshAccessToken();
   },
 }));
