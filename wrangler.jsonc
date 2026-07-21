@@ -1,0 +1,43 @@
+{
+  // Configuración de despliegue del frontend en Cloudflare Workers (assets estáticos).
+  //
+  // Versionar este archivo es deliberado: sin él, `wrangler deploy` lanza un asistente
+  // interactivo que en CI responde con valores por defecto y regenera la configuración
+  // en cada compilación. Eso hace que el despliegue dependa de lo que Cloudflare decida
+  // por defecto ese día, en lugar de lo que tú declaraste.
+  //
+  // Se despliega con:  npx wrangler deploy   (comando ya configurado en el panel)
+
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // DEBE coincidir con el Worker ya existente. Cambiarlo crearía uno nuevo y dejaría
+  // el anterior huérfano.
+  "name": "rmrlocations",
+
+  // Fija el comportamiento del runtime de Cloudflare a esta fecha. Subirla es una
+  // decisión consciente, no algo que deba cambiar solo.
+  "compatibility_date": "2026-07-21",
+
+  "assets": {
+    // Salida de `vite build`.
+    "directory": "./dist",
+
+    // Routing de aplicación de página única: cualquier ruta que no corresponda a un
+    // archivo real devuelve index.html y React Router se encarga del resto.
+    //
+    // Esto SUSTITUYE al antiguo public/_redirects. Aquel archivo contenía
+    // `/* /index.html 200`, que Cloudflare rechazaba por bucle infinito: los assets
+    // estáticos ya normalizan las URLs quitando `/index` y `.html`, así que la regla
+    // se disparaba a sí misma indefinidamente.
+    "not_found_handling": "single-page-application"
+  },
+
+  // Logs y métricas del Worker en el panel de Cloudflare. Útil para diagnosticar.
+  "observability": {
+    "enabled": true
+  }
+
+  // NO se incluye "main": este Worker no ejecuta código propio, solo sirve archivos.
+  // NO se incluye "nodejs_compat": esa bandera solo tiene sentido con código de
+  // servidor que use APIs de Node. El asistente la añadía por defecto sin necesidad.
+}

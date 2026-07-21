@@ -43,3 +43,6 @@ coverage/
 .claude/cache/
 .claude/projects/
 .claude/session-data/
+
+# Cloudflare Wrangler
+.wrangler/
