@@ -1,0 +1,24 @@
+# Cabeceras HTTP aplicadas por Cloudflare a los assets estáticos.
+# Vite copia este archivo de public/ a dist/ y Cloudflare lo interpreta al desplegar.
+
+/*
+  # Obliga al navegador a usar HTTPS en las siguientes visitas.
+  #
+  # Los dominios workers.dev responden tanto por http como por https, y Cloudflare
+  # no ofrece ahí el ajuste "Always Use HTTPS" (es de zona, y workers.dev no es
+  # nuestra zona). Sin esta cabecera, entrar sin escribir https:// carga la versión
+  # en claro y el navegador muestra "Sitio no seguro".
+  #
+  # LIMITACIÓN: HSTS no protege la PRIMERA visita por http, porque el navegador
+  # aún no ha visto la cabecera. El arreglo completo es publicar el sitio en un
+  # dominio propio con "Always Use HTTPS" activado.
+  Strict-Transport-Security: max-age=31536000
+
+  # El navegador respeta el Content-Type declarado y no intenta adivinarlo.
+  X-Content-Type-Options: nosniff
+
+  # Impide que el sitio se embeba en un iframe ajeno (clickjacking).
+  X-Frame-Options: DENY
+
+  # Al navegar a otro sitio solo se envía el origen, y nunca por http.
+  Referrer-Policy: strict-origin-when-cross-origin

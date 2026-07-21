@@ -2,10 +2,28 @@ import { create } from "zustand";
 import { jwtDecode } from "jwt-decode";
 import type { RoleName, JwtPayload } from "@/types/models";
 
-function normalizeRoles(role?: string | string[]): RoleName[] {
-  if (!role) return [];
-  if (Array.isArray(role)) return role as RoleName[];
-  return [role as RoleName];
+/**
+ * Nombre largo con el que ASP.NET Core emite el claim de rol en el JWT.
+ * El backend añade los roles como ClaimTypes.Role, y .NET lo serializa con esta
+ * URI en lugar de con la clave corta "role" del estándar JWT.
+ */
+const MS_ROLE_CLAIM =
+  "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
+
+/**
+ * Extrae los roles del payload del JWT.
+ *
+ * Lee ambas variantes: la clave corta "role" y la URI larga de Microsoft. Antes
+ * solo se miraba "role", que en los tokens que emite esta API siempre es undefined,
+ * de modo que TODO usuario acababa con la lista de roles vacía — incluidos los
+ * administradores, que perdían el acceso a las secciones protegidas.
+ *
+ * Un solo rol llega como cadena y varios como array; se normalizan a array.
+ */
+function extractRoles(payload: Record<string, unknown>): RoleName[] {
+  const raw = payload["role"] ?? payload[MS_ROLE_CLAIM];
+  if (!raw) return [];
+  return (Array.isArray(raw) ? raw : [raw]) as RoleName[];
 }
 
 interface AuthState {
@@ -38,7 +56,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       refreshToken: refresh,
       userId: decoded.sub,
       userName: decoded.name,
-      roles: normalizeRoles(decoded.role),
+      roles: extractRoles(decoded as unknown as Record<string, unknown>),
       status: "authenticated",
     });
   },

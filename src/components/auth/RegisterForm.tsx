@@ -48,15 +48,16 @@ export default function RegisterForm() {
       toast.success("Cuenta creada. Bienvenido!");
       navigate("/", { replace: true });
     } catch (error: unknown) {
-      const axiosError = error as { response?: { status?: number; data?: { detail?: string; title?: string } } };
-      if (axiosError.response?.status === 400) {
-        const msg =
-          axiosError.response.data?.detail ||
-          axiosError.response.data?.title ||
-          "Datos invalidos. Revisa los campos e intenta de nuevo.";
-        setServerError(msg);
+      // Se delega en getApiErrorMessage, que ya contempla los cuerpos de texto
+      // plano que devuelve la API (p. ej. "Username already exists."). Antes se
+      // leía data.detail/data.title directamente y, al ser una cadena, ambos daban
+      // undefined: el motivo real nunca llegaba a mostrarse.
+      const status = (error as { response?: { status?: number } }).response?.status;
+      const msg = getApiErrorMessage(error);
+      if (status === 400 || status === 409) {
+        setServerError(msg); // error de validación: se muestra junto al formulario
       } else {
-        toast.error(getApiErrorMessage(error));
+        toast.error(msg);
       }
     }
   };

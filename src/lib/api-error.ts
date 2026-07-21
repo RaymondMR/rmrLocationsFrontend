@@ -10,6 +10,14 @@ export function getApiErrorMessage(
     const status = resp?.status;
     const data = resp?.data;
 
+    // La API no siempre responde con ProblemDetails: algunos endpoints devuelven
+    // el motivo como texto plano, p. ej. BadRequest("Username already exists.").
+    // Sin este caso, leer data.detail/data.title sobre una cadena da undefined y
+    // el usuario recibía un mensaje genérico en lugar del motivo real.
+    if (typeof data === "string" && data.trim()) {
+      return data.trim();
+    }
+
     switch (status) {
       case 400:
         if (data?.detail) return data.detail;
