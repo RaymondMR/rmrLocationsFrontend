@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth-store";
 
 export function useUserCollections() {
   const userId = useAuthStore((s) => s.userId);
+  const status = useAuthStore((s) => s.status);
   return useQuery({
     queryKey: ["collections", userId],
     queryFn: async () => {
@@ -13,7 +14,10 @@ export function useUserCollections() {
       const { data } = await api.get<LocationCollection[]>(`/api/collection/user/${userId}`);
       return data;
     },
-    enabled: !!userId,
+    // userId se hidrata desde localStorage ANTES de que el bootstrap obtenga el access token: sin esperar
+    // a "authenticated" la petición sale sin token, recibe 401 y su interceptor lanza un segundo refresh
+    // que choca con el del bootstrap (el perdedor llama a logout() y la sesión se pierde).
+    enabled: !!userId && status === "authenticated",
   });
 }
 

@@ -42,7 +42,11 @@ import type { CollectionFormData } from "@/types/forms";
 export default function LocationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { userId, roles } = useAuthStore();
+  const { userId, roles, status: authStatus } = useAuthStore();
+  // La API oculta un lugar Draft / no público a quien no sea su dueño, así que la respuesta depende de
+  // quién pregunta: se espera a que el bootstrap resuelva la sesión para que la primera petición ya
+  // lleve el token (si no, el dueño recibiría 404 al recargar la página de su propio lugar).
+  const authReady = authStatus !== "loading";
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -91,7 +95,7 @@ export default function LocationDetailPage() {
     queryKey: ["locations", id],
     queryFn: () =>
       api.get<Location>(`/api/location/${id}`).then((r) => r.data),
-    enabled: !!id,
+    enabled: !!id && authReady,
     staleTime: 60_000,
     retry: false,
   });
@@ -102,7 +106,7 @@ export default function LocationDetailPage() {
       api
         .get<Review[]>(`/api/review/location/${id}`)
         .then((r) => r.data),
-    enabled: !!id,
+    enabled: !!id && authReady,
     staleTime: 60_000,
   });
 
@@ -133,7 +137,9 @@ export default function LocationDetailPage() {
   /* ══════════════════════════════════════════════ */
   /*  STATES                                       */
   /* ══════════════════════════════════════════════ */
-  if (locationQuery.isLoading) {
+  // Con la consulta desactivada (sesión aún sin resolver) isLoading es false: sin esto se llegaría a
+  // `locationQuery.data!` con data undefined.
+  if (!authReady || locationQuery.isLoading) {
     return (
       <div>
         <LoadingSkeleton variant="detail" />
