@@ -6,6 +6,11 @@ export const DEFAULT_PAGE_SIZE = 20;
 export const QUERY_STALE_TIME = 120_000; // 2 minutos
 export const SEARCH_DEBOUNCE_MS = 350;
 export const MAP_DEBOUNCE_MS = 400;
+
+// Tiles de OpenStreetMap (FRONTEND_DESIGN_SPEC §10.2). La atribución es obligatoria.
+export const MAP_TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+export const MAP_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors';
 export const TOAST_DURATION = 4000;
 
 export const DAYS_OF_WEEK: { value: string; label: string }[] = [

@@ -1,6 +1,11 @@
 import { toGeoJSON } from "@/lib/geo";
-import type { LocationFormValues } from "@/types/forms";
-import type { Address, CreateLocationRequest } from "@/types/models";
+import type { LocationEditValues, LocationFormValues } from "@/types/forms";
+import type {
+  Address,
+  CreateLocationRequest,
+  Location,
+  UpdateLocationRequest,
+} from "@/types/models";
 
 /**
  * "09:00" → "09:00:00".
@@ -17,27 +22,30 @@ function clean(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+/** Dirección sin campos vacíos; el código de país (ISO 3166-1 alpha-2) va en mayúsculas. */
+function buildAddress(values: LocationFormValues["address"]): Address {
+  return {
+    name: clean(values.name),
+    street: clean(values.street),
+    exteriorNumber: clean(values.exteriorNumber),
+    interiorNumber: clean(values.interiorNumber),
+    neighborhood: clean(values.neighborhood),
+    city: clean(values.city),
+    state: clean(values.state),
+    postalCode: clean(values.postalCode),
+    countryCode: clean(values.countryCode)?.toUpperCase(),
+  };
+}
+
 /** Convierte los valores validados del formulario en el cuerpo de POST /api/location. */
 export function buildLocationPayload(values: LocationFormValues): CreateLocationRequest {
-  const address: Address = {
-    name: clean(values.address.name),
-    street: clean(values.address.street),
-    exteriorNumber: clean(values.address.exteriorNumber),
-    interiorNumber: clean(values.address.interiorNumber),
-    neighborhood: clean(values.address.neighborhood),
-    city: clean(values.address.city),
-    state: clean(values.address.state),
-    postalCode: clean(values.address.postalCode),
-    countryCode: clean(values.address.countryCode),
-  };
-
   return {
     name: values.name.trim(),
     slug: values.slug,
     description: clean(values.description),
     // Lat/lng llegan como texto ya validado; toGeoJSON aplica el orden [lng, lat].
     coordinates: toGeoJSON(Number(values.latitude), Number(values.longitude)),
-    address,
+    address: buildAddress(values.address),
     status: values.status,
     isPublic: values.isPublic,
     websiteUrl: clean(values.websiteUrl),
@@ -55,5 +63,27 @@ export function buildLocationPayload(values: LocationFormValues): CreateLocation
           isClosed: hour.isClosed,
         }))
       : [],
+  };
+}
+
+/** Convierte los valores validados del formulario de edición en el cuerpo de PUT /api/location/{id}. */
+export function buildLocationUpdatePayload(
+  values: LocationEditValues,
+  location: Pick<Location, "id" | "coordinates">,
+): UpdateLocationRequest {
+  return {
+    id: location.id,
+    name: values.name.trim(),
+    slug: values.slug,
+    description: clean(values.description),
+    // El body exige `coordinates` aunque el PUT no las modifica: se reenvían las cargadas.
+    coordinates: location.coordinates,
+    // El PUT reemplaza el objeto Address entero: van todos sus campos, incluido
+    // address.name, que la pantalla no muestra pero llega en los defaultValues.
+    address: buildAddress(values.address),
+    status: values.status,
+    isPublic: values.isPublic,
+    websiteUrl: clean(values.websiteUrl),
+    phoneNumber: clean(values.phoneNumber),
   };
 }

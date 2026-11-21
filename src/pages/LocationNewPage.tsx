@@ -18,6 +18,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
+import LocationPickerLazy from "@/components/locations/LocationPickerLazy";
 import { useCategories } from "@/hooks/use-categories";
 import { useTags } from "@/hooks/use-tags";
 import { useCreateLocation } from "@/hooks/use-locations";
@@ -28,6 +29,8 @@ import { buildLocationPayload } from "@/lib/location-payload";
 import { COMMON_COUNTRIES } from "@/lib/constants";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { slugify } from "@/lib/slug";
+import { formatCoordinateInput } from "@/lib/geo";
+import type { LatLng } from "@/lib/geo";
 
 /* ────────────────────────────────────────────── */
 /*  Tab definitions                               */
@@ -128,6 +131,19 @@ export default function LocationNewPage() {
 
   const defineHours = watch("defineHours");
   const hours = watch("openingHours");
+  const latitude = watch("latitude");
+  const longitude = watch("longitude");
+
+  // El mapa entrega el punto ya normalizado (±90 / ±180); los inputs guardan texto.
+  // shouldValidate limpia al instante los errores de latitud/longitud que hubiera.
+  const pickPoint = useCallback(
+    (point: LatLng) => {
+      const options = { shouldValidate: true, shouldDirty: true, shouldTouch: true } as const;
+      setValue("latitude", formatCoordinateInput(point.lat), options);
+      setValue("longitude", formatCoordinateInput(point.lng), options);
+    },
+    [setValue],
+  );
 
   /* ── Tab navigation ───────────────────────── */
   const tabIndex = TABS.findIndex((t) => t.id === currentTab);
@@ -441,50 +457,18 @@ export default function LocationNewPage() {
             <div style={sectionStyle}>
               <h3 style={headingStyle}>Ubicacion geografica</h3>
 
-              {/* Location picker placeholder */}
-              <div
-                style={{
-                  width: "100%",
-                  height: "320px",
-                  borderRadius: "10px",
-                  border: "2px dashed var(--border)",
-                  background: "var(--background)",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.75rem",
-                  color: "var(--ink-muted)",
-                }}
-              >
-                <Map size={36} style={{ color: "var(--primary)" }} />
-                <span
-                  style={{
-                    fontFamily: "var(--display)",
-                    fontSize: "0.95rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  Mapa interactivo — selecciona la ubicacion
-                </span>
-                <span
-                  style={{
-                    fontSize: "0.8rem",
-                    textAlign: "center",
-                    maxWidth: "320px",
-                  }}
-                >
-                  Haz clic en el mapa para marcar la posicion del lugar.
-                  (Disponible en una proxima fase) Mientras tanto, escribe la
-                  latitud y la longitud en los campos de abajo.
-                </span>
-              </div>
+              {/* Mapa interactivo: clic o arrastre del pin ⇄ inputs de latitud/longitud */}
+              <LocationPickerLazy
+                latitude={latitude}
+                longitude={longitude}
+                onChange={pickPoint}
+              />
 
               <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
                 <FormField label="Latitud" required error={errors.latitude?.message}>
                   <input
                     type="number"
-                    step="any"
+                    step="0.0001"
                     placeholder="19.4326"
                     style={{ ...inputStyle, fontFamily: "var(--mono)" }}
                     {...register("latitude")}
@@ -493,7 +477,7 @@ export default function LocationNewPage() {
                 <FormField label="Longitud" required error={errors.longitude?.message}>
                   <input
                     type="number"
-                    step="any"
+                    step="0.0001"
                     placeholder="-99.1332"
                     style={{ ...inputStyle, fontFamily: "var(--mono)" }}
                     {...register("longitude")}
@@ -757,50 +741,46 @@ export default function LocationNewPage() {
         <div
           style={{
             display: "flex",
+            flexWrap: "wrap",
             justifyContent: "space-between",
             alignItems: "center",
+            gap: "0.75rem",
           }}
         >
           <button
             type="button"
             onClick={goPrev}
             disabled={!hasPrev}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              padding: "10px 18px",
-              borderRadius: "8px",
-              border: "1px solid var(--border)",
-              background: "var(--surface)",
-              color: hasPrev ? "var(--ink)" : "var(--ink-muted)",
-              cursor: hasPrev ? "pointer" : "not-allowed",
-              fontFamily: "var(--sans)",
-              fontSize: "0.85rem",
-              fontWeight: 500,
-              opacity: hasPrev ? 1 : 0.5,
-            }}
+            style={secondaryButtonStyle(hasPrev)}
           >
             <ChevronLeft size={16} />
             Anterior
           </button>
 
-          {hasNext ? (
-            <button
-              type="button"
-              onClick={goNext}
-              style={primaryButtonStyle}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-              }}
-            >
-              Siguiente
-              <ChevronRight size={16} />
-            </button>
-          ) : (
+          {/* "Guardar lugar" está en TODAS las pestañas: el formulario es uno solo y los
+              campos de las pestañas que no se ven conservan su valor. Si algo falta o es
+              inválido, onInvalid salta a la primera pestaña con errores. */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              // A la derecha también cuando, en pantallas estrechas, pasa a la fila de abajo.
+              marginLeft: "auto",
+              gap: "0.5rem",
+            }}
+          >
+            {hasNext && (
+              <button
+                type="button"
+                onClick={goNext}
+                style={secondaryButtonStyle(true)}
+              >
+                Siguiente
+                <ChevronRight size={16} />
+              </button>
+            )}
             <button
               type="submit"
               disabled={isSubmitting}
@@ -822,7 +802,7 @@ export default function LocationNewPage() {
               <Save size={16} />
               {isSubmitting ? "Guardando…" : "Guardar lugar"}
             </button>
-          )}
+          </div>
         </div>
       </form>
     </div>
@@ -972,6 +952,25 @@ const primaryButtonStyle: React.CSSProperties = {
   fontWeight: 600,
   transition: "opacity 0.15s",
 };
+
+/** Botón de navegación (Anterior / Siguiente): contorno, sin relleno. */
+function secondaryButtonStyle(enabled: boolean): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    padding: "10px 18px",
+    borderRadius: "8px",
+    border: "1px solid var(--border)",
+    background: "var(--surface)",
+    color: enabled ? "var(--ink)" : "var(--ink-muted)",
+    cursor: enabled ? "pointer" : "not-allowed",
+    fontFamily: "var(--sans)",
+    fontSize: "0.85rem",
+    fontWeight: 500,
+    opacity: enabled ? 1 : 0.5,
+  };
+}
 
 function chipStyle(selected: boolean): React.CSSProperties {
   return {

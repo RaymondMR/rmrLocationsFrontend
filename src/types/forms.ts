@@ -134,6 +134,22 @@ export const locationFormSchema = z
     });
   });
 
+// Edición de un lugar (LocationEditPage): reutiliza las reglas de información básica y
+// dirección del formulario de alta. Ubicación, clasificación y horarios no se editan
+// (el PUT del API los ignora) y, a diferencia del alta, el estado admite "Archived".
+const locationBase = locationFormSchema.shape;
+
+export const locationEditSchema = z.object({
+  name: locationBase.name,
+  slug: locationBase.slug,
+  description: locationBase.description,
+  websiteUrl: locationBase.websiteUrl,
+  phoneNumber: locationBase.phoneNumber,
+  address: locationBase.address,
+  status: z.enum(["Draft", "Published", "Archived"]),
+  isPublic: z.boolean(),
+});
+
 export const categorySchema = z.object({
   name: z.string().min(1).max(120),
   slug: z.string().min(1).max(140).regex(slugRegex),
@@ -178,6 +194,7 @@ export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 export type AddressFormData = z.infer<typeof addressSchema>;
 export type LocationFormData = z.infer<typeof locationSchema>;
 export type LocationFormValues = z.infer<typeof locationFormSchema>;
+export type LocationEditValues = z.infer<typeof locationEditSchema>;
 export type CategoryFormData = z.infer<typeof categorySchema>;
 export type TagFormData = z.infer<typeof tagSchema>;
 export type ReviewFormData = z.infer<typeof reviewSchema>;

@@ -202,6 +202,26 @@ export interface CreateLocationRequest {
   openingHours: Pick<OpeningHour, "dayOfWeek" | "opensAt" | "closesAt" | "isClosed">[];
 }
 
+/**
+ * Cuerpo de PUT /api/location/{id} (responde 204). El API solo copia name, slug,
+ * description, websiteUrl, phoneNumber, status, isPublic y `address`, este último
+ * REEMPLAZADO por completo: hay que reenviar todos sus campos, también los que la
+ * pantalla no muestra, o se borran. `coordinates` es obligatorio en el body aunque
+ * el API no lo modifica; categorías, tags y horarios no se editan con este PUT.
+ */
+export interface UpdateLocationRequest {
+  id: Guid;
+  name: string;
+  slug: string;
+  description?: string;
+  coordinates: GeoJSONPoint;
+  address: Address;
+  status: LocationStatus;
+  isPublic: boolean;
+  websiteUrl?: string;
+  phoneNumber?: string;
+}
+
 export interface ProblemDetails { type?: string; title?: string; status?: number; detail?: string; }
 export interface ValidationProblemDetails extends ProblemDetails {
   errors?: Record<string, string[]>;

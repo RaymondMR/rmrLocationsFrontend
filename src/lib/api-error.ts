@@ -31,7 +31,7 @@ export function getApiErrorMessage(
         if (data?.title) return data.title;
         return "Datos inválidos. Revisa los campos e intenta de nuevo.";
       case 401:
-        return context === "session"
+        return context === "session" || context === "write"
           ? "Tu sesión expiró. Inicia sesión de nuevo."
           : "Credenciales inválidas.";
       case 403:

@@ -1,6 +1,11 @@
 import { useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import type { FieldErrors } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { isAxiosError } from "axios";
+import { toast } from "sonner";
 import {
   Info,
   MapPin,
@@ -17,16 +22,30 @@ import {
 import PageHeader from "@/components/shared/PageHeader";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import ErrorState from "@/components/shared/ErrorState";
-import { cn } from "@/lib/utils";
+import LocationPickerLazy from "@/components/locations/LocationPickerLazy";
+import OpeningHoursDisplay from "@/components/locations/OpeningHoursDisplay";
 import api from "@/lib/axios";
-import type { LocationFormData } from "@/types/forms";
+import { useAuthStore } from "@/stores/auth-store";
+import { useUpdateLocation } from "@/hooks/use-locations";
+import { locationEditSchema } from "@/types/forms";
+import type { LocationEditValues } from "@/types/forms";
 import type { Location } from "@/types/models";
+import { buildLocationUpdatePayload } from "@/lib/location-payload";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 /* ────────────────────────────────────────────── */
 /*  Tabs definitions                              */
 /* ────────────────────────────────────────────── */
+type TabId =
+  | "info"
+  | "address"
+  | "location"
+  | "classification"
+  | "hours"
+  | "publish";
+
 interface TabDef {
-  id: string;
+  id: TabId;
   label: string;
   icon: React.ReactNode;
   readOnly?: boolean;
@@ -51,13 +70,49 @@ const TABS: TabDef[] = [
   { id: "publish", label: "Publicacion", icon: <CheckSquare size={16} /> },
 ];
 
+/**
+ * Claves de primer nivel del formulario que muestra cada pestaña editable (las de solo
+ * lectura no tienen campos). Sirve para saltar a la pestaña correcta cuando la
+ * validación falla fuera de la vista y para marcar con un punto rojo las que tienen errores.
+ */
+const TAB_FIELDS: Partial<Record<TabId, ReadonlyArray<keyof LocationEditValues>>> = {
+  info: ["name", "slug", "description", "websiteUrl", "phoneNumber"],
+  address: ["address"],
+  publish: ["status", "isPublic"],
+};
+
+function toEditDefaults(loc: Location): LocationEditValues {
+  return {
+    name: loc.name,
+    slug: loc.slug,
+    description: loc.description ?? "",
+    websiteUrl: loc.websiteUrl ?? "",
+    phoneNumber: loc.phoneNumber ?? "",
+    address: {
+      // `name` no tiene campo en pantalla, pero DEBE reenviarse: el PUT reemplaza la
+      // dirección completa y, si faltara, el servidor la borraría.
+      name: loc.address?.name ?? "",
+      street: loc.address?.street ?? "",
+      exteriorNumber: loc.address?.exteriorNumber ?? "",
+      interiorNumber: loc.address?.interiorNumber ?? "",
+      neighborhood: loc.address?.neighborhood ?? "",
+      city: loc.address?.city ?? "",
+      state: loc.address?.state ?? "",
+      postalCode: loc.address?.postalCode ?? "",
+      countryCode: loc.address?.countryCode ?? "",
+    },
+    status: loc.status,
+    isPublic: loc.isPublic,
+  };
+}
+
 /* ────────────────────────────────────────────── */
 /*  LocationEditPage                              */
 /* ────────────────────────────────────────────── */
 export default function LocationEditPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const [currentTab, setCurrentTab] = useState("info");
+  const userId = useAuthStore((s) => s.userId);
+  const roles = useAuthStore((s) => s.roles);
 
   /* ── Fetch existing location ──────────────── */
   const locationQuery = useQuery({
@@ -67,6 +122,68 @@ export default function LocationEditPage() {
     enabled: !!id,
     staleTime: 30_000,
     retry: false,
+  });
+
+  /* ══════════════════════════════════════════════ */
+  /*  STATES                                       */
+  /* ══════════════════════════════════════════════ */
+  if (locationQuery.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Editar lugar" />
+        <LoadingSkeleton variant="detail" />
+      </div>
+    );
+  }
+
+  const loc = locationQuery.data;
+
+  if (locationQuery.isError || !loc) {
+    return (
+      <ErrorState
+        message={
+          locationQuery.isError
+            ? getApiErrorMessage(locationQuery.error, "el lugar")
+            : "No pudimos cargar la informacion del lugar"
+        }
+        onRetry={() => locationQuery.refetch()}
+      />
+    );
+  }
+
+  // Solo el dueño o un administrador pueden editar (el API responde 403 al resto).
+  const isOwner =
+    !!userId && loc.ownerId.toLowerCase() === userId.toLowerCase();
+  if (!isOwner && !roles.includes("Admin")) {
+    return (
+      <ErrorState
+        title="Sin permisos"
+        message="Solo el dueño del lugar o un administrador puede editarlo."
+      />
+    );
+  }
+
+  // El formulario vive en un componente aparte para inicializarlo con los datos ya
+  // cargados (defaultValues solo se lee en el primer render).
+  return <LocationEditForm key={loc.id} loc={loc} />;
+}
+
+/* ────────────────────────────────────────────── */
+/*  LocationEditForm                              */
+/* ────────────────────────────────────────────── */
+function LocationEditForm({ loc }: { loc: Location }) {
+  const navigate = useNavigate();
+  const [currentTab, setCurrentTab] = useState<TabId>("info");
+  const updateLocation = useUpdateLocation(loc.id);
+
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<LocationEditValues>({
+    resolver: zodResolver(locationEditSchema),
+    defaultValues: toEditDefaults(loc),
   });
 
   /* ── Tab navigation ───────────────────────── */
@@ -82,59 +199,54 @@ export default function LocationEditPage() {
     if (hasPrev) setCurrentTab(TABS[tabIndex - 1].id);
   }, [tabIndex, hasPrev]);
 
-  /* ── Submit handler placeholder ───────────── */
-  const editMutation = useMutation({
-    mutationFn: (data: Partial<LocationFormData>) =>
-      api.put<Location>(`/api/location/${id}`, data).then((r) => r.data),
-    onSuccess: () => {
-      navigate(`/locations/${id}`);
-    },
-  });
+  const tabHasError = (id: TabId) =>
+    (TAB_FIELDS[id] ?? []).some((field) => Boolean(errors[field]));
 
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      // TODO Phase 4: implement full form with react-hook-form + zod
-      // editMutation.mutate({ ... });
-    },
-    [editMutation, id],
-  );
+  /* ── Submit ───────────────────────────────── */
+  const onSubmit = async (values: LocationEditValues) => {
+    try {
+      await updateLocation.mutateAsync(buildLocationUpdatePayload(values, loc));
+      // El hook ya muestra "Lugar actualizado" e invalida ["locations"].
+      navigate(`/locations/${loc.id}`);
+    } catch (error) {
+      // El slug es la única restricción de unicidad de un lugar: 409 = ya existe.
+      if (
+        isAxiosError(error) &&
+        error.response?.status === 409 &&
+        /slug/i.test(String(error.response.data?.detail ?? ""))
+      ) {
+        setError("slug", {
+          type: "server",
+          message: "Ya existe un lugar con ese slug. Prueba con otro.",
+        });
+        setCurrentTab("info");
+        toast.error("Ya existe un lugar con ese slug.");
+        return;
+      }
+      toast.error(getApiErrorMessage(error, "write"));
+    }
+  };
 
-  /* ══════════════════════════════════════════════ */
-  /*  STATES                                       */
-  /* ══════════════════════════════════════════════ */
-  if (locationQuery.isLoading) {
-    return (
-      <div>
-        <PageHeader title="Editar lugar" />
-        <LoadingSkeleton variant="detail" />
-      </div>
+  // La validación puede fallar en una pestaña que no está a la vista: se salta a la
+  // primera que tenga errores para que el usuario vea qué corregir.
+  const onInvalid = (invalid: FieldErrors<LocationEditValues>) => {
+    const firstTab = TABS.find((tab) =>
+      (TAB_FIELDS[tab.id] ?? []).some((field) => Boolean(invalid[field])),
     );
-  }
-
-  if (locationQuery.isError) {
-    return (
-      <ErrorState
-        message={
-          (locationQuery.error as Error)?.message ??
-          "No pudimos cargar la informacion del lugar"
-        }
-        onRetry={() => locationQuery.refetch()}
-      />
-    );
-  }
-
-  const loc = locationQuery.data!;
+    if (firstTab) {
+      setCurrentTab(firstTab.id);
+      toast.error(`Revisa los campos marcados en la pestaña "${firstTab.label}".`);
+    } else {
+      toast.error("Revisa los campos marcados en rojo.");
+    }
+  };
 
   /* ══════════════════════════════════════════════ */
   /*  RENDER                                       */
   /* ══════════════════════════════════════════════ */
   return (
     <div>
-      <PageHeader
-        title="Editar lugar"
-        subtitle={`Editando: ${loc.name}`}
-      />
+      <PageHeader title="Editar lugar" subtitle={`Editando: ${loc.name}`} />
 
       {/* ── Tab bar ────────────────────────────── */}
       <div
@@ -154,7 +266,9 @@ export default function LocationEditPage() {
           return (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setCurrentTab(tab.id)}
+              aria-current={isActive ? "step" : undefined}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -180,13 +294,27 @@ export default function LocationEditPage() {
               {tab.icon}
               {tab.label}
               {tab.readOnly && <Lock size={12} />}
+              {tabHasError(tab.id) && (
+                <span
+                  role="img"
+                  aria-label="Hay campos con errores"
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "var(--danger)",
+                    boxShadow: isActive ? "0 0 0 2px #fff" : "none",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
             </button>
           );
         })}
       </div>
 
       {/* ── Tab content ────────────────────────── */}
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate>
         <div
           style={{
             padding: "1.5rem",
@@ -197,46 +325,29 @@ export default function LocationEditPage() {
           }}
         >
           {currentTab === "info" && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
-              }}
-            >
-              <h3
-                style={{
-                  fontFamily: "var(--display)",
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                  color: "var(--ink)",
-                  margin: 0,
-                }}
-              >
-                Informacion basica
-              </h3>
+            <div style={sectionStyle}>
+              <h3 style={headingStyle}>Informacion basica</h3>
 
-              <FormField label="Nombre del lugar" required>
+              <FormField label="Nombre del lugar" required error={errors.name?.message}>
                 <input
                   type="text"
-                  defaultValue={loc.name}
                   placeholder="Nombre del lugar"
                   style={inputStyle}
+                  {...register("name")}
                 />
               </FormField>
 
-              <FormField label="Slug" required>
+              <FormField label="Slug" required error={errors.slug?.message}>
                 <input
                   type="text"
-                  defaultValue={loc.slug}
                   placeholder="slug-del-lugar"
                   style={{ ...inputStyle, fontFamily: "var(--mono)" }}
+                  {...register("slug")}
                 />
               </FormField>
 
-              <FormField label="Descripcion">
+              <FormField label="Descripcion" error={errors.description?.message}>
                 <textarea
-                  defaultValue={loc.description ?? ""}
                   placeholder="Describe el lugar…"
                   rows={4}
                   style={{
@@ -244,111 +355,103 @@ export default function LocationEditPage() {
                     resize: "vertical",
                     minHeight: "80px",
                   }}
+                  {...register("description")}
                 />
               </FormField>
 
-              <FormField label="Sitio web">
+              <FormField label="Sitio web" error={errors.websiteUrl?.message}>
                 <input
                   type="url"
-                  defaultValue={loc.websiteUrl ?? ""}
                   placeholder="https://…"
                   style={inputStyle}
+                  {...register("websiteUrl")}
                 />
               </FormField>
 
-              <FormField label="Telefono">
+              <FormField label="Telefono" error={errors.phoneNumber?.message}>
                 <input
                   type="tel"
-                  defaultValue={loc.phoneNumber ?? ""}
                   placeholder="+52 55 …"
                   style={inputStyle}
+                  {...register("phoneNumber")}
                 />
               </FormField>
             </div>
           )}
 
           {currentTab === "address" && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
-              }}
-            >
-              <h3
-                style={{
-                  fontFamily: "var(--display)",
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                  color: "var(--ink)",
-                  margin: 0,
-                }}
-              >
-                Direccion del lugar
-              </h3>
+            <div style={sectionStyle}>
+              <h3 style={headingStyle}>Direccion del lugar</h3>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                }}
-                className="max-sm:grid-cols-1"
-              >
-                <FormField label="Calle">
+              <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+                <FormField label="Calle" error={errors.address?.street?.message}>
                   <input
                     type="text"
-                    defaultValue={loc.address?.street ?? ""}
                     style={inputStyle}
+                    {...register("address.street")}
                   />
                 </FormField>
-                <FormField label="Numero exterior">
+                <FormField
+                  label="Numero exterior"
+                  error={errors.address?.exteriorNumber?.message}
+                >
                   <input
                     type="text"
-                    defaultValue={loc.address?.exteriorNumber ?? ""}
                     style={inputStyle}
+                    {...register("address.exteriorNumber")}
                   />
                 </FormField>
-                <FormField label="Numero interior">
+                <FormField
+                  label="Numero interior"
+                  error={errors.address?.interiorNumber?.message}
+                >
                   <input
                     type="text"
-                    defaultValue={loc.address?.interiorNumber ?? ""}
                     style={inputStyle}
+                    {...register("address.interiorNumber")}
                   />
                 </FormField>
-                <FormField label="Colonia">
+                <FormField
+                  label="Colonia"
+                  error={errors.address?.neighborhood?.message}
+                >
                   <input
                     type="text"
-                    defaultValue={loc.address?.neighborhood ?? ""}
                     style={inputStyle}
+                    {...register("address.neighborhood")}
                   />
                 </FormField>
-                <FormField label="Ciudad">
+                <FormField label="Ciudad" error={errors.address?.city?.message}>
                   <input
                     type="text"
-                    defaultValue={loc.address?.city ?? ""}
                     style={inputStyle}
+                    {...register("address.city")}
                   />
                 </FormField>
-                <FormField label="Estado">
+                <FormField label="Estado" error={errors.address?.state?.message}>
                   <input
                     type="text"
-                    defaultValue={loc.address?.state ?? ""}
                     style={inputStyle}
+                    {...register("address.state")}
                   />
                 </FormField>
-                <FormField label="Codigo postal">
+                <FormField
+                  label="Codigo postal"
+                  error={errors.address?.postalCode?.message}
+                >
                   <input
                     type="text"
-                    defaultValue={loc.address?.postalCode ?? ""}
                     style={inputStyle}
+                    {...register("address.postalCode")}
                   />
                 </FormField>
-                <FormField label="Pais">
+                <FormField label="Pais" error={errors.address?.countryCode?.message}>
                   <input
                     type="text"
-                    defaultValue={loc.address?.countryCode ?? "MX"}
+                    maxLength={2}
+                    placeholder="MX"
                     style={{ ...inputStyle, fontFamily: "var(--mono)" }}
+                    {...register("address.countryCode")}
                   />
                 </FormField>
               </div>
@@ -361,37 +464,15 @@ export default function LocationEditPage() {
               title="Ubicacion geografica"
               message="Solo se define al crear el lugar. Si necesitas cambiar la ubicacion, crea un nuevo lugar."
             >
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                }}
-              >
-                <FormField label="Latitud">
-                  <input
-                    type="text"
-                    value={loc.latitude.toFixed(6)}
-                    readOnly
-                    style={{
-                      ...inputStyle,
-                      fontFamily: "var(--mono)",
-                      opacity: 0.6,
-                    }}
-                  />
-                </FormField>
-                <FormField label="Longitud">
-                  <input
-                    type="text"
-                    value={loc.longitude.toFixed(6)}
-                    readOnly
-                    style={{
-                      ...inputStyle,
-                      fontFamily: "var(--mono)",
-                      opacity: 0.6,
-                    }}
-                  />
-                </FormField>
+              {/* Mapa de solo lectura: muestra el pin; el API no permite mover un lugar ya creado. */}
+              <LocationPickerLazy
+                latitude={String(loc.latitude)}
+                longitude={String(loc.longitude)}
+                readOnly
+              />
+              <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+                <ReadOnlyField label="Latitud" value={loc.latitude.toFixed(6)} />
+                <ReadOnlyField label="Longitud" value={loc.longitude.toFixed(6)} />
               </div>
             </ReadOnlyBlock>
           )}
@@ -464,72 +545,14 @@ export default function LocationEditPage() {
               title="Horarios de atencion"
               message="Solo se definen al crear el lugar. Si necesitas actualizar los horarios, crea un nuevo lugar."
             >
-              {loc.openingHours && loc.openingHours.length > 0 ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.3rem",
-                    marginTop: "0.5rem",
-                  }}
-                >
-                  {loc.openingHours.map((oh) => (
-                    <div
-                      key={oh.id}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontSize: "0.85rem",
-                        fontFamily: "var(--mono)",
-                        color: oh.isClosed
-                          ? "var(--ink-muted)"
-                          : "var(--ink)",
-                        padding: "0.25rem 0",
-                        borderBottom: "1px solid var(--border)",
-                      }}
-                    >
-                      <span>{oh.dayOfWeek.slice(0, 3)}</span>
-                      <span>
-                        {oh.isClosed
-                          ? "Cerrado"
-                          : `${oh.opensAt} - ${oh.closesAt}`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p
-                  style={{
-                    fontSize: "0.85rem",
-                    color: "var(--ink-muted)",
-                    fontStyle: "italic",
-                  }}
-                >
-                  Sin horarios registrados
-                </p>
-              )}
+              {/* De lunes a domingo y sin segundos, igual que en el detalle del lugar. */}
+              <OpeningHoursDisplay hours={loc.openingHours} variant="plain" />
             </ReadOnlyBlock>
           )}
 
           {currentTab === "publish" && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
-              }}
-            >
-              <h3
-                style={{
-                  fontFamily: "var(--display)",
-                  fontSize: "1rem",
-                  fontWeight: 600,
-                  color: "var(--ink)",
-                  margin: 0,
-                }}
-              >
-                Publicacion
-              </h3>
+            <div style={sectionStyle}>
+              <h3 style={headingStyle}>Publicacion</h3>
 
               <div
                 style={{
@@ -538,76 +561,22 @@ export default function LocationEditPage() {
                   gap: "0.75rem",
                 }}
               >
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    cursor: "pointer",
-                    fontSize: "0.85rem",
-                    color: "var(--ink)",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="status"
-                    value="Draft"
-                    defaultChecked={loc.status === "Draft"}
-                  />
+                <label style={checkLabelStyle}>
+                  <input type="radio" value="Draft" {...register("status")} />
                   Borrador
                 </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    cursor: "pointer",
-                    fontSize: "0.85rem",
-                    color: "var(--ink)",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="status"
-                    value="Published"
-                    defaultChecked={loc.status === "Published"}
-                  />
+                <label style={checkLabelStyle}>
+                  <input type="radio" value="Published" {...register("status")} />
                   Publicado
                 </label>
-                <label
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    cursor: "pointer",
-                    fontSize: "0.85rem",
-                    color: "var(--ink)",
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="status"
-                    value="Archived"
-                    defaultChecked={loc.status === "Archived"}
-                  />
+                <label style={checkLabelStyle}>
+                  <input type="radio" value="Archived" {...register("status")} />
                   Archivado
                 </label>
               </div>
 
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                  color: "var(--ink)",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  defaultChecked={loc.isPublic}
-                />
+              <label style={checkLabelStyle}>
+                <input type="checkbox" {...register("isPublic")} />
                 Visible en busquedas publicas
               </label>
             </div>
@@ -618,95 +587,67 @@ export default function LocationEditPage() {
         <div
           style={{
             display: "flex",
+            flexWrap: "wrap",
             justifyContent: "space-between",
             alignItems: "center",
+            gap: "0.75rem",
           }}
         >
           <button
             type="button"
             onClick={goPrev}
             disabled={!hasPrev}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              padding: "10px 18px",
-              borderRadius: "8px",
-              border: "1px solid var(--border)",
-              background: "var(--surface)",
-              color: hasPrev ? "var(--ink)" : "var(--ink-muted)",
-              cursor: hasPrev ? "pointer" : "not-allowed",
-              fontFamily: "var(--sans)",
-              fontSize: "0.85rem",
-              fontWeight: 500,
-              opacity: hasPrev ? 1 : 0.5,
-            }}
+            style={secondaryButtonStyle(hasPrev)}
           >
             <ChevronLeft size={16} />
             Anterior
           </button>
 
-          {hasNext ? (
-            <button
-              type="button"
-              onClick={goNext}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                padding: "10px 18px",
-                borderRadius: "8px",
-                border: "none",
-                background: "var(--primary)",
-                color: "#fff",
-                cursor: "pointer",
-                fontFamily: "var(--sans)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                transition: "opacity 0.15s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-              }}
-            >
-              Siguiente
-              <ChevronRight size={16} />
-            </button>
-          ) : (
+          {/* "Guardar cambios" está en TODAS las pestañas: el formulario es uno solo y los
+              campos de las pestañas que no se ven conservan su valor. */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              // A la derecha también cuando, en pantallas estrechas, pasa a la fila de abajo.
+              marginLeft: "auto",
+              gap: "0.5rem",
+            }}
+          >
+            {hasNext && (
+              <button
+                type="button"
+                onClick={goNext}
+                style={secondaryButtonStyle(true)}
+              >
+                Siguiente
+                <ChevronRight size={16} />
+              </button>
+            )}
             <button
               type="submit"
-              disabled={editMutation.isPending}
+              disabled={isSubmitting}
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                padding: "10px 18px",
-                borderRadius: "8px",
-                border: "none",
-                background: "var(--primary)",
-                color: "#fff",
-                cursor: "pointer",
-                fontFamily: "var(--sans)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                transition: "opacity 0.15s",
+                ...primaryButtonStyle,
+                cursor: isSubmitting ? "not-allowed" : "pointer",
+                opacity: isSubmitting ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
+                if (!isSubmitting)
+                  (e.currentTarget as HTMLElement).style.opacity = "0.9";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
+                (e.currentTarget as HTMLElement).style.opacity = isSubmitting
+                  ? "0.6"
+                  : "1";
               }}
             >
               <Save size={16} />
-              {editMutation.isPending
-                ? "Guardando…"
-                : "Guardar cambios"}
+              {isSubmitting ? "Guardando…" : "Guardar cambios"}
             </button>
-          )}
+          </div>
         </div>
       </form>
     </div>
@@ -720,10 +661,11 @@ export default function LocationEditPage() {
 interface FormFieldProps {
   label: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }
 
-function FormField({ label, required, children }: FormFieldProps) {
+function FormField({ label, required, error, children }: FormFieldProps) {
   return (
     <label
       style={{
@@ -740,7 +682,29 @@ function FormField({ label, required, children }: FormFieldProps) {
         <span style={{ color: "var(--danger)", marginLeft: "2px" }}>*</span>
       )}
       {children}
+      {error && (
+        <span role="alert" style={errorTextStyle}>
+          {error}
+        </span>
+      )}
     </label>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <FormField label={label}>
+      <input
+        type="text"
+        value={value}
+        readOnly
+        style={{
+          ...inputStyle,
+          fontFamily: "var(--mono)",
+          opacity: 0.6,
+        }}
+      />
+    </FormField>
   );
 }
 
@@ -769,17 +733,7 @@ function ReadOnlyBlock({
         }}
       >
         <Lock size={16} style={{ color: "var(--ink-muted)" }} />
-        <h3
-          style={{
-            fontFamily: "var(--display)",
-            fontSize: "1rem",
-            fontWeight: 600,
-            color: "var(--ink)",
-            margin: 0,
-          }}
-        >
-          {title}
-        </h3>
+        <h3 style={headingStyle}>{title}</h3>
       </div>
 
       <div
@@ -832,3 +786,66 @@ const inputStyle: React.CSSProperties = {
   transition: "border-color 0.15s",
   boxSizing: "border-box",
 };
+
+const sectionStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "1rem",
+};
+
+const headingStyle: React.CSSProperties = {
+  fontFamily: "var(--display)",
+  fontSize: "1rem",
+  fontWeight: 600,
+  color: "var(--ink)",
+  margin: 0,
+};
+
+const checkLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+  cursor: "pointer",
+  fontSize: "0.85rem",
+  color: "var(--ink)",
+};
+
+const errorTextStyle: React.CSSProperties = {
+  color: "var(--danger)",
+  fontSize: "0.78rem",
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.35rem",
+  padding: "10px 18px",
+  borderRadius: "8px",
+  border: "none",
+  background: "var(--primary)",
+  color: "#fff",
+  cursor: "pointer",
+  fontFamily: "var(--sans)",
+  fontSize: "0.85rem",
+  fontWeight: 600,
+  transition: "opacity 0.15s",
+};
+
+/** Botón de navegación (Anterior / Siguiente): contorno, sin relleno. */
+function secondaryButtonStyle(enabled: boolean): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    padding: "10px 18px",
+    borderRadius: "8px",
+    border: "1px solid var(--border)",
+    background: "var(--surface)",
+    color: enabled ? "var(--ink)" : "var(--ink-muted)",
+    cursor: enabled ? "pointer" : "not-allowed",
+    fontFamily: "var(--sans)",
+    fontSize: "0.85rem",
+    fontWeight: 500,
+    opacity: enabled ? 1 : 0.5,
+  };
+}

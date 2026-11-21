@@ -1,7 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import api from "@/lib/axios";
-import type { Location, PagedResult, NearbyResult, CreateLocationRequest } from "@/types/models";
+import type {
+  Location,
+  PagedResult,
+  NearbyResult,
+  CreateLocationRequest,
+  UpdateLocationRequest,
+} from "@/types/models";
 
 interface LocationFilters {
   name?: string;
@@ -98,6 +104,20 @@ export function useCreateLocation() {
       // Los listados (home, explorar, mapa) cachean bajo ["locations", …].
       qc.invalidateQueries({ queryKey: ["locations"] });
       toast.success("Lugar creado");
+    },
+  });
+}
+
+export function useUpdateLocation(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: UpdateLocationRequest) => {
+      await api.put(`/api/location/${id}`, body); // 204 No Content
+    },
+    onSuccess: () => {
+      // Cubre el detalle (["locations", id]) y los listados.
+      qc.invalidateQueries({ queryKey: ["locations"] });
+      toast.success("Lugar actualizado");
     },
   });
 }

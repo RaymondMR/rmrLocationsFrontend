@@ -1,70 +1,118 @@
-import type { OpeningHour, DayOfWeekName } from "@/types/models";
-import { DAYS_OF_WEEK } from "@/lib/constants";
+import { Clock } from "lucide-react";
+import type { DayOfWeekName, OpeningHour } from "@/types/models";
+import { buildWeekSchedule } from "@/lib/opening-hours";
 
 interface OpeningHoursDisplayProps {
-  hours: OpeningHour[];
+  hours: readonly OpeningHour[] | null | undefined;
+  /**
+   * "card" (por defecto): tarjeta con título, como el resto de bloques del detalle.
+   * "plain": solo las filas, para contenedores que ya traen su propio título (la edición).
+   */
+  variant?: "card" | "plain";
 }
 
-export default function OpeningHoursDisplay({ hours }: OpeningHoursDisplayProps) {
-  if (!hours || hours.length === 0) return null;
+/** Orden de Date.getDay(): 0 = domingo. */
+const DAY_NAMES_FROM_SUNDAY: DayOfWeekName[] = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
-  const today = new Date().getDay(); // 0=Sun, 1=Mon...
-  const dayMap: DayOfWeekName[] = [
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
-  ];
-  const todayName = dayMap[today];
+/**
+ * Horario semanal de un lugar. Los días salen siempre de lunes a domingo (el API devuelve
+ * los registros en el orden de inserción), sin segundos y con todos los tramos de cada día.
+ */
+export default function OpeningHoursDisplay({
+  hours,
+  variant = "card",
+}: OpeningHoursDisplayProps) {
+  const schedule = buildWeekSchedule(hours);
+  const hasHours = schedule.some((day) => day.recorded);
+  const today = DAY_NAMES_FROM_SUNDAY[new Date().getDay()];
 
-  const formatTime = (time: string) => time.slice(0, 5); // "HH:mm:ss" → "HH:mm"
+  const body = hasHours ? (
+    <ul
+      style={{
+        listStyle: "none",
+        margin: 0,
+        padding: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.3rem",
+      }}
+    >
+      {schedule.map((day) => {
+        const isToday = day.day === today;
+        const isOpen = day.recorded && !day.closed;
+        return (
+          <li
+            key={day.day}
+            aria-current={isToday ? "date" : undefined}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+              padding: "0.2rem 0.5rem",
+              borderRadius: "6px",
+              fontSize: "0.8rem",
+              fontWeight: isToday ? 600 : 400,
+              background: isToday
+                ? "color-mix(in srgb, var(--primary) 8%, transparent)"
+                : "transparent",
+            }}
+          >
+            <span style={{ color: isToday ? "var(--primary)" : "var(--ink)" }}>
+              {day.label}
+            </span>
+            <span
+              style={{
+                textAlign: "right",
+                fontFamily: isOpen ? "var(--mono)" : "var(--sans)",
+                color: isOpen ? "var(--ink)" : "var(--ink-muted)",
+              }}
+            >
+              {day.closed ? "Cerrado" : isOpen ? day.ranges.join(", ") : "—"}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  ) : (
+    <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--ink-muted)" }}>
+      Sin horarios registrados
+    </p>
+  );
+
+  if (variant === "plain") return body;
 
   return (
     <div
-      className="rounded-xl border p-4"
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+      style={{
+        padding: "1rem",
+        borderRadius: "10px",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+      }}
     >
-      <h4
-        className="text-sm font-semibold mb-3"
-        style={{ fontFamily: "var(--display)", color: "var(--ink)" }}
+      <h3
+        style={{
+          fontFamily: "var(--display)",
+          fontSize: "0.9rem",
+          fontWeight: 600,
+          color: "var(--ink)",
+          margin: "0 0 0.5rem 0",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.35rem",
+        }}
       >
-        Horario
-      </h4>
-      <div className="flex flex-col gap-1.5">
-        {DAYS_OF_WEEK.map((d) => {
-          const hour = hours.find((h) => h.dayOfWeek === d.value);
-          const isToday = d.value === todayName;
-          return (
-            <div
-              key={d.value}
-              className="flex items-center justify-between text-sm py-1 px-2 rounded-md"
-              style={{
-                background: isToday ? "var(--primary)" + "0D" : "transparent",
-                fontWeight: isToday ? 600 : 400,
-              }}
-            >
-              <span
-                style={{
-                  color: isToday ? "var(--primary)" : "var(--ink)",
-                  fontFamily: isToday ? "var(--display)" : "var(--sans)",
-                }}
-              >
-                {d.label}
-              </span>
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 13,
-                  color: hour?.isClosed ? "var(--ink-muted)" : "var(--ink)",
-                }}
-              >
-                {hour?.isClosed
-                  ? "Cerrado"
-                  : hour
-                    ? `${formatTime(hour.opensAt)}–${formatTime(hour.closesAt)}`
-                    : "—"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+        <Clock size={14} /> Horarios
+      </h3>
+      {body}
     </div>
   );
 }

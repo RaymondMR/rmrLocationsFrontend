@@ -9,11 +9,9 @@ import {
   MoreHorizontal,
   Edit3,
   Trash2,
-  Clock,
   Globe,
   Phone,
   ChevronRight,
-  Map,
 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
@@ -21,6 +19,8 @@ import EmptyState from "@/components/shared/EmptyState";
 import ErrorState from "@/components/shared/ErrorState";
 import Breadcrumbs from "@/components/layout/Breadcrumbs";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import LocationPickerLazy from "@/components/locations/LocationPickerLazy";
+import OpeningHoursDisplay from "@/components/locations/OpeningHoursDisplay";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
 import { useAuthStore } from "@/stores/auth-store";
@@ -656,43 +656,13 @@ export default function LocationDetailPage() {
             gap: "1.25rem",
           }}
         >
-          {/* Map placeholder */}
-          <div
-            style={{
-              width: "100%",
-              height: "220px",
-              borderRadius: "12px",
-              border: "1px solid var(--border)",
-              background:
-                "repeating-linear-gradient(45deg, var(--background) 0px, var(--background) 16px, var(--surface) 16px, var(--surface) 32px)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              color: "var(--ink-muted)",
-            }}
-          >
-            <Map size={28} style={{ color: "var(--primary)" }} />
-            <span
-              style={{
-                fontFamily: "var(--display)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-              }}
-            >
-              Mapa interactivo
-            </span>
-            <span
-              style={{
-                fontSize: "0.75rem",
-                textAlign: "center",
-                padding: "0 1rem",
-              }}
-            >
-              {formatCoordinates(loc.latitude, loc.longitude)}
-            </span>
-          </div>
+          {/* Mapa de solo lectura con el pin del lugar (zoom con rueda solo tras hacer clic) */}
+          <LocationPickerLazy
+            latitude={String(loc.latitude)}
+            longitude={String(loc.longitude)}
+            readOnly
+            size="compact"
+          />
 
           {/* Address card */}
           <div
@@ -735,71 +705,9 @@ export default function LocationDetailPage() {
             </p>
           </div>
 
-          {/* Opening hours */}
-          <div
-            style={{
-              padding: "1rem",
-              borderRadius: "10px",
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-            }}
-          >
-            <h3
-              style={{
-                fontFamily: "var(--display)",
-                fontSize: "0.9rem",
-                fontWeight: 600,
-                color: "var(--ink)",
-                margin: "0 0 0.5rem 0",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.35rem",
-              }}
-            >
-              <Clock size={14} /> Horarios
-            </h3>
-            {loc.openingHours && loc.openingHours.length > 0 ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.3rem",
-                }}
-              >
-                {loc.openingHours.map((oh) => (
-                  <div
-                    key={oh.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: "0.8rem",
-                      color: oh.isClosed
-                        ? "var(--ink-muted)"
-                        : "var(--ink)",
-                      fontFamily: oh.isClosed ? "var(--sans)" : "var(--mono)",
-                    }}
-                  >
-                    <span>{oh.dayOfWeek.slice(0, 3)}</span>
-                    <span>
-                      {oh.isClosed
-                        ? "Cerrado"
-                        : `${oh.opensAt} - ${oh.closesAt}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "0.8rem",
-                  color: "var(--ink-muted)",
-                }}
-              >
-                Sin horarios registrados
-              </p>
-            )}
-          </div>
+          {/* Opening hours: de lunes a domingo, sin segundos (el API los devuelve en el
+              orden de inserción y como HH:mm:ss) */}
+          <OpeningHoursDisplay hours={loc.openingHours} />
 
           {/* Links */}
           {(loc.websiteUrl || loc.phoneNumber) && (

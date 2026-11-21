@@ -76,3 +76,43 @@ body {
     transition: none !important;
   }
 }
+
+/* ── Mapas (Leaflet) ─────────────────────────────────────────────────
+   El marco aísla el z-index interno de Leaflet (paneles 200-700, controles
+   1000): sin esto el mapa se pintaría por encima de la navbar y los diálogos. */
+.rmr-map-frame {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
+.rmr-map.leaflet-container {
+  font-family: var(--sans);
+  background: var(--background);
+}
+
+/* Dark mode: el mismo tile OSM con un filtro suave (DARK_MAP_FILTER en lib/geo.ts,
+   que el componente pasa como --map-tile-filter); los colores no se invierten. */
+.rmr-map .leaflet-tile-pane {
+  filter: var(--map-tile-filter, none);
+}
+
+/* Anillo de foco hacia dentro: el marco recorta (overflow: hidden) lo que sobresalga. */
+.rmr-map:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* divIcon sin el cuadro blanco con borde que Leaflet añade por defecto. */
+.rmr-pin {
+  background: none;
+  border: 0;
+}
+
+.rmr-pin svg {
+  display: block;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.35));
+}
