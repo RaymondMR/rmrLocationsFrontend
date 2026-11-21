@@ -185,6 +185,23 @@ export interface JwtPayload {
 
 export interface AddCollectionItemRequest { locationId: Guid; notes?: string | null; }
 
+/** Cuerpo de POST /api/location. El API acepta el grafo completo (categorías, tags y horarios). */
+export interface CreateLocationRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  coordinates: GeoJSONPoint;
+  address: Address;
+  status: LocationStatus;
+  isPublic: boolean;
+  websiteUrl?: string;
+  phoneNumber?: string;
+  locationCategories: { categoryId: Guid; isPrimary: boolean }[];
+  locationTags: { tagId: Guid }[];
+  /** `opensAt`/`closesAt` van como "HH:mm:ss": el API responde 400 si faltan los segundos. */
+  openingHours: Pick<OpeningHour, "dayOfWeek" | "opensAt" | "closesAt" | "isClosed">[];
+}
+
 export interface ProblemDetails { type?: string; title?: string; status?: number; detail?: string; }
 export interface ValidationProblemDetails extends ProblemDetails {
   errors?: Record<string, string[]>;

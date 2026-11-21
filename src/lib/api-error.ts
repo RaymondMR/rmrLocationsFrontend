@@ -21,6 +21,13 @@ export function getApiErrorMessage(
     switch (status) {
       case 400:
         if (data?.detail) return data.detail;
+        if (data?.errors) {
+          // ValidationProblemDetails de ASP.NET: { errors: { Campo: ["mensaje", …] } }.
+          // Sin esto el usuario solo veía el título genérico "One or more validation
+          // errors occurred." y ningún motivo concreto.
+          const messages = Object.values(data.errors).flat();
+          if (messages.length > 0) return messages.slice(0, 3).join(" ");
+        }
         if (data?.title) return data.title;
         return "Datos inválidos. Revisa los campos e intenta de nuevo.";
       case 401:

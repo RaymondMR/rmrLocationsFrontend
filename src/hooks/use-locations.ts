@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import api from "@/lib/axios";
-import type { Location, PagedResult, NearbyResult } from "@/types/models";
+import type { Location, PagedResult, NearbyResult, CreateLocationRequest } from "@/types/models";
 
 interface LocationFilters {
   name?: string;
@@ -83,5 +84,20 @@ export function useSearchLocations(
       return data;
     },
     enabled: lat != null && lng != null,
+  });
+}
+
+export function useCreateLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: CreateLocationRequest) => {
+      const { data } = await api.post<Location>("/api/location", body);
+      return data;
+    },
+    onSuccess: () => {
+      // Los listados (home, explorar, mapa) cachean bajo ["locations", …].
+      qc.invalidateQueries({ queryKey: ["locations"] });
+      toast.success("Lugar creado");
+    },
   });
 }

@@ -49,6 +49,91 @@ export const locationSchema = z.object({
   phoneNumber: z.string().max(32).optional().or(z.literal("")),
 });
 
+// ---------------------------------------------------------------------------
+// Formulario "Nuevo lugar" (LocationNewPage)
+//
+// Los inputs HTML entregan texto, así que latitud y longitud viajan como string y
+// se convierten a número al armar el payload (lib/location-payload.ts).
+// El backend NO valida campos vacíos ni rangos (acepta name:"" y coordenadas como
+// [-999, 95]), así que toda esa validación vive aquí.
+// ---------------------------------------------------------------------------
+
+export const DAY_OF_WEEK_VALUES = [
+  "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+] as const;
+
+const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Solo http(s): el valor se renderiza como href en el detalle del lugar. */
+function isHttpUrl(value: string): boolean {
+  if (!/^https?:\/\//i.test(value)) return false;
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function coordinateField(label: string, min: number, max: number) {
+  return z
+    .string()
+    .refine((v) => v.trim() !== "", `${label} es obligatoria`)
+    .refine((v) => {
+      if (v.trim() === "") return true; // el caso vacío ya lo reporta la regla anterior
+      const n = Number(v);
+      return Number.isFinite(n) && n >= min && n <= max;
+    }, `${label} debe ser un número entre ${min} y ${max}`);
+}
+
+export const locationFormSchema = z
+  .object({
+    name: z.string().trim().min(1, "El nombre es obligatorio").max(200, "Máximo 200 caracteres"),
+    slug: z
+      .string()
+      .min(1, "El slug es obligatorio")
+      .max(220, "Máximo 220 caracteres")
+      .regex(slugRegex, "Solo minúsculas, números y guiones"),
+    description: z.string().max(4000, "Máximo 4000 caracteres"),
+    websiteUrl: z
+      .string()
+      .max(2048, "Máximo 2048 caracteres")
+      .refine((v) => v.trim() === "" || isHttpUrl(v.trim()), "URL inválida: debe empezar con http:// o https://"),
+    phoneNumber: z.string().max(32, "Máximo 32 caracteres"),
+    address: addressSchema,
+    latitude: coordinateField("La latitud", -90, 90),
+    longitude: coordinateField("La longitud", -180, 180),
+    categoryId: z.string(),
+    tagIds: z.array(z.string()),
+    // Si es false no se envía ningún horario (el detalle muestra "—" en cada día).
+    defineHours: z.boolean(),
+    openingHours: z.array(
+      z.object({
+        dayOfWeek: z.enum(DAY_OF_WEEK_VALUES),
+        opensAt: z.string(),
+        closesAt: z.string(),
+        isClosed: z.boolean(),
+      }),
+    ),
+    status: z.enum(["Draft", "Published"]),
+    isPublic: z.boolean(),
+  })
+  .superRefine((values, ctx) => {
+    if (!values.defineHours) return;
+    values.openingHours.forEach((hour, index) => {
+      if (hour.isClosed) return;
+      for (const field of ["opensAt", "closesAt"] as const) {
+        if (!timeRegex.test(hour[field])) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["openingHours", index, field],
+            message: "Hora inválida",
+          });
+        }
+      }
+    });
+  });
+
 export const categorySchema = z.object({
   name: z.string().min(1).max(120),
   slug: z.string().min(1).max(140).regex(slugRegex),
@@ -92,6 +177,7 @@ export type RegisterFormData = z.infer<typeof registerSchema>;
 export type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 export type AddressFormData = z.infer<typeof addressSchema>;
 export type LocationFormData = z.infer<typeof locationSchema>;
+export type LocationFormValues = z.infer<typeof locationFormSchema>;
 export type CategoryFormData = z.infer<typeof categorySchema>;
 export type TagFormData = z.infer<typeof tagSchema>;
 export type ReviewFormData = z.infer<typeof reviewSchema>;
