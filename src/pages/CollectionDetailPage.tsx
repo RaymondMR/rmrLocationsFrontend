@@ -22,7 +22,12 @@ import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
 import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "sonner";
+import CollectionFormDialog from "@/components/collections/CollectionFormDialog";
+import { useUpdateCollection, useRemoveFromCollection } from "@/hooks/use-collections";
+import { getApiErrorMessage } from "@/lib/api-error";
 import type { LocationCollection } from "@/types/models";
+import type { CollectionFormData } from "@/types/forms";
 
 /* ────────────────────────────────────────────── */
 /*  Visibility badge config                       */
@@ -59,6 +64,23 @@ export default function CollectionDetailPage() {
   const navigate = useNavigate();
   const { userId } = useAuthStore();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const updateMutation = useUpdateCollection();
+  const removeMutation = useRemoveFromCollection();
+
+  const handleEdit = async (data: CollectionFormData) => {
+    if (!id) return;
+    try {
+      await updateMutation.mutateAsync({
+        id,
+        name: data.name,
+        description: data.description || undefined,
+        visibility: data.visibility,
+      });
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    }
+  };
 
   const collectionQuery = useQuery({
     queryKey: ["collections", "detail", id],
@@ -275,6 +297,7 @@ export default function CollectionDetailPage() {
             </button>
 
             <button
+              onClick={() => setEditOpen(true)}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -467,6 +490,44 @@ export default function CollectionDetailPage() {
                   </div>
                 </div>
 
+                {isOwner && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      removeMutation.mutate({
+                        collectionId: col.id,
+                        locationId: item.locationId,
+                      });
+                    }}
+                    title="Quitar de la colección"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "8px",
+                      border: "1px solid var(--border)",
+                      background: "var(--surface)",
+                      color: "var(--danger)",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background =
+                        "color-mix(in srgb, var(--danger) 8%, transparent)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background =
+                        "var(--surface)";
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+
                 <ChevronRight
                   size={16}
                   style={{
@@ -488,6 +549,15 @@ export default function CollectionDetailPage() {
         confirmLabel="Eliminar"
         variant="danger"
         onConfirm={handleDelete}
+      />
+
+      {/* ── Edit dialog ─────────────────────────── */}
+      <CollectionFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        initial={col}
+        onSubmit={handleEdit}
+        isSubmitting={updateMutation.isPending}
       />
     </div>
   );

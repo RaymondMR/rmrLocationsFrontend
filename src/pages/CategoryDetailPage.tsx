@@ -1,13 +1,19 @@
-import { useParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Map, MapPin, Star, Utensils } from "lucide-react";
+import { Map, MapPin, Star, Utensils, Edit3, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import PageHeader from "@/components/shared/PageHeader";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import EmptyState from "@/components/shared/EmptyState";
 import ErrorState from "@/components/shared/ErrorState";
 import Breadcrumbs from "@/components/layout/Breadcrumbs";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
+import { useAuthStore } from "@/stores/auth-store";
+import { useDeleteCategory } from "@/hooks/use-categories";
+import { getApiErrorMessage } from "@/lib/api-error";
 import type { Category, Location, PagedResult } from "@/types/models";
 
 /* ────────────────────────────────────────────── */
@@ -15,6 +21,22 @@ import type { Category, Location, PagedResult } from "@/types/models";
 /* ────────────────────────────────────────────── */
 export default function CategoryDetailPage() {
   const { id } = useParams<{ id: string }>();
+
+  const { roles } = useAuthStore();
+  const isAdmin = roles.includes("Admin");
+  const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteMutation = useDeleteCategory();
+
+  const handleDelete = async () => {
+    if (!id) return;
+    try {
+      await deleteMutation.mutateAsync(id);
+      navigate("/categories", { replace: true });
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    }
+  };
 
   const categoryQuery = useQuery({
     queryKey: ["categories", id],
@@ -178,6 +200,72 @@ export default function CategoryDetailPage() {
           <Map size={16} />
           Explorar en el mapa
         </Link>
+
+        {isAdmin && (
+          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+            <Link
+              to={`/categories/${id}/edit`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "10px 16px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                color: "var(--ink)",
+                cursor: "pointer",
+                fontFamily: "var(--sans)",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                textDecoration: "none",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--background)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--surface)";
+              }}
+            >
+              <Edit3 size={15} />
+              Editar
+            </Link>
+            <button
+              onClick={() => setDeleteOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "10px 16px",
+                borderRadius: "8px",
+                border: "1px solid var(--danger)",
+                background: "transparent",
+                color: "var(--danger)",
+                cursor: "pointer",
+                fontFamily: "var(--sans)",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "color-mix(in srgb, var(--danger) 10%, transparent)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "transparent";
+              }}
+            >
+              <Trash2 size={15} />
+              Eliminar
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Subcategories ─────────────────────── */}
@@ -377,6 +465,16 @@ export default function CategoryDetailPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Eliminar categoria"
+        description="Esta accion no se puede deshacer. La categoria se eliminara permanentemente."
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

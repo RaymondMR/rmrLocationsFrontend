@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
@@ -27,6 +27,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import { formatCoordinates, formatDistance } from "@/lib/geo";
 import { formatDate } from "@/lib/slug";
 import type { Location, Review, OpeningHour } from "@/types/models";
+import AddToCollectionDialog from "@/components/collections/AddToCollectionDialog";
+import CollectionFormDialog from "@/components/collections/CollectionFormDialog";
+import {
+  useUserCollections,
+  useAddToCollection,
+  useCreateCollection,
+} from "@/hooks/use-collections";
+import type { CollectionFormData } from "@/types/forms";
 
 /* ────────────────────────────────────────────── */
 /*  LocationDetailPage                            */
@@ -41,6 +49,42 @@ export default function LocationDetailPage() {
   const isOwnerOrAdmin =
     !!userId &&
     (roles.includes("Admin") || roles.includes("Owner"));
+
+  /* ── Save-to-collection state + queries ──── */
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [createColOpen, setCreateColOpen] = useState(false);
+  const collectionsQuery = useUserCollections();
+  const addToMutation = useAddToCollection();
+  const createColMutation = useCreateCollection();
+
+  // Colecciones del usuario que ya contienen este lugar → marca "Ya guardado".
+  const existingCollectionIds = useMemo(
+    () =>
+      (collectionsQuery.data ?? [])
+        .filter((c) => c.items?.some((i) => i.locationId === id))
+        .map((c) => c.id),
+    [collectionsQuery.data, id],
+  );
+
+  const handleAdd = (collectionId: string) => {
+    if (!id) return;
+    addToMutation.mutate({ collectionId, locationId: id });
+  };
+
+  const handleCreateNew = () => {
+    setSaveOpen(false);
+    setCreateColOpen(true);
+  };
+
+  const handleCreateCol = async (data: CollectionFormData) => {
+    await createColMutation.mutateAsync({
+      name: data.name,
+      description: data.description || undefined,
+      visibility: data.visibility,
+    });
+    setCreateColOpen(false);
+    setSaveOpen(true);
+  };
 
   /* ── Queries ──────────────────────────────── */
   const locationQuery = useQuery({
@@ -190,35 +234,38 @@ export default function LocationDetailPage() {
             flexShrink: 0,
           }}
         >
-          {/* Save */}
-          <button
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              padding: "9px 16px",
-              borderRadius: "8px",
-              border: "1px solid var(--border)",
-              background: "var(--surface)",
-              color: "var(--ink)",
-              cursor: "pointer",
-              fontFamily: "var(--sans)",
-              fontSize: "0.85rem",
-              fontWeight: 500,
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background =
-                "var(--background)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background =
-                "var(--surface)";
-            }}
-          >
-            <Bookmark size={15} />
-            Guardar
-          </button>
+          {/* Save (authenticated only) */}
+          {userId && (
+            <button
+              onClick={() => setSaveOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "9px 16px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                color: "var(--ink)",
+                cursor: "pointer",
+                fontFamily: "var(--sans)",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--background)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--surface)";
+              }}
+            >
+              <Bookmark size={15} />
+              Guardar
+            </button>
+          )}
 
           {/* Share */}
           <button
@@ -766,6 +813,25 @@ export default function LocationDetailPage() {
         confirmLabel="Eliminar"
         variant="danger"
         onConfirm={handleDelete}
+      />
+
+      {/* ── Save to collection + inline create dialogs ── */}
+      <AddToCollectionDialog
+        open={saveOpen}
+        onOpenChange={setSaveOpen}
+        collections={collectionsQuery.data ?? []}
+        locationId={id ?? ""}
+        locationName={loc.name}
+        existingCollectionIds={existingCollectionIds}
+        onAdd={handleAdd}
+        onCreateNew={handleCreateNew}
+        isAdding={addToMutation.isPending}
+      />
+      <CollectionFormDialog
+        open={createColOpen}
+        onOpenChange={setCreateColOpen}
+        onSubmit={handleCreateCol}
+        isSubmitting={createColMutation.isPending}
       />
     </div>
   );

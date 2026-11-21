@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,10 +7,12 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { collectionSchema, type CollectionFormData } from "@/types/forms";
 import { Lock, Link2, Globe } from "lucide-react";
+import type { LocationCollection } from "@/types/models";
 
 interface CollectionFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initial?: LocationCollection | null;
   onSubmit: (data: CollectionFormData) => Promise<void>;
   isSubmitting?: boolean;
 }
@@ -35,24 +38,59 @@ const visibilityOptions = [
   },
 ];
 
+// Diálogo de crear + editar colección. `initial` decide modo editar: si llega
+// una colección, se rellena el form con sus datos y el botón dice "Guardar
+// cambios"; si no, es creación ("Crear colección"). Sigue callback-driven: el
+// parent decide si llama a useCreateCollection o useUpdateCollection.
 export default function CollectionFormDialog({
   open,
   onOpenChange,
+  initial,
   onSubmit,
   isSubmitting,
 }: CollectionFormDialogProps) {
+  const isEdit = !!initial;
+
   const {
     register,
     handleSubmit,
     control,
+    reset,
     formState: { errors },
   } = useForm<CollectionFormData>({
     resolver: zodResolver(collectionSchema),
-    defaultValues: { name: "", description: "", visibility: "Public" },
+    defaultValues: initial
+      ? {
+          name: initial.name,
+          description: initial.description ?? "",
+          visibility: initial.visibility,
+        }
+      : { name: "", description: "", visibility: "Public" },
   });
 
+  // Re-llenar al abrir: la misma instancia sirve para crear y editar, así que
+  // hay que resetear con los valores de `initial` (o vacíos para crear) cada
+  // vez que se abre.
+  useEffect(() => {
+    if (open) {
+      reset(
+        initial
+          ? {
+              name: initial.name,
+              description: initial.description ?? "",
+              visibility: initial.visibility,
+            }
+          : { name: "", description: "", visibility: "Public" },
+      );
+    }
+  }, [open, initial, reset]);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title="Nueva colección">
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={isEdit ? "Editar colección" : "Nueva colección"}
+    >
       <form
         onSubmit={handleSubmit(async (data) => {
           await onSubmit(data);
@@ -135,7 +173,7 @@ export default function CollectionFormDialog({
             Cancelar
           </Button>
           <Button type="submit" loading={isSubmitting}>
-            Crear colección
+            {isEdit ? "Guardar cambios" : "Crear colección"}
           </Button>
         </div>
       </form>

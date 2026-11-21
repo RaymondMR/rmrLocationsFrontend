@@ -1,7 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import { useEffect } from "react";
 import { useAuthStore } from "@/stores/auth-store";
-import { refreshAccessToken } from "@/lib/refresh-token";
 import AppShell from "@/components/layout/AppShell";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
@@ -15,6 +13,8 @@ import LocationNewPage from "@/pages/LocationNewPage";
 import LocationEditPage from "@/pages/LocationEditPage";
 import CategoriesPage from "@/pages/CategoriesPage";
 import CategoryDetailPage from "@/pages/CategoryDetailPage";
+import CategoryNewPage from "@/pages/CategoryNewPage";
+import CategoryEditPage from "@/pages/CategoryEditPage";
 import TagsPage from "@/pages/TagsPage";
 import TagDetailPage from "@/pages/TagDetailPage";
 import CollectionsPage from "@/pages/CollectionsPage";
@@ -27,19 +27,11 @@ import ContactPage from "@/pages/ContactPage";
 export default function App() {
   const status = useAuthStore((s) => s.status);
 
-  useEffect(() => {
-    // Bootstrap session: try to refresh token on mount
-    const rt = localStorage.getItem("rmr.refreshToken");
-    const uid = localStorage.getItem("rmr.userId");
-    if (rt && uid) {
-      refreshAccessToken().finally(() => {
-        const store = useAuthStore.getState();
-        if (store.status === "loading") {
-          store.logout();
-        }
-      });
-    }
-  }, []);
+  // El refresh silencioso al arrancar lo hace una sola vez `bootstrap()` desde
+  // main.tsx (ámbito de módulo). NO replicarlo aquí con un useEffect: si dos
+  // triggers llaman a /api/auth/refresh-token a la vez, la rotación de tokens
+  // del backend invalida el perdedor (401 "Invalid refresh token") y dispara
+  // logout(), cerrando la sesión en cada recarga / URL directa.
 
   return (
     <Routes>
@@ -67,6 +59,22 @@ export default function App() {
         />
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="categories/:id" element={<CategoryDetailPage />} />
+        <Route
+          path="categories/new"
+          element={
+            <ProtectedRoute role="Admin">
+              <CategoryNewPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="categories/:id/edit"
+          element={
+            <ProtectedRoute role="Admin">
+              <CategoryEditPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="tags" element={<TagsPage />} />
         <Route path="tags/:id" element={<TagDetailPage />} />
         <Route

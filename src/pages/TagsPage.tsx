@@ -9,6 +9,9 @@ import ErrorState from "@/components/shared/ErrorState";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
 import { useAuthStore } from "@/stores/auth-store";
+import TagFormDialog from "@/components/tags/TagFormDialog";
+import { useCreateTag } from "@/hooks/use-tags";
+import type { TagFormData } from "@/types/forms";
 import type { Tag as TagType } from "@/types/models";
 
 /* ────────────────────────────────────────────── */
@@ -18,6 +21,17 @@ export default function TagsPage() {
   const { roles } = useAuthStore();
   const isAdmin = roles.includes("Admin");
   const [searchFilter, setSearchFilter] = useState("");
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const createMutation = useCreateTag();
+
+  const handleCreate = async (data: TagFormData) => {
+    await createMutation.mutateAsync({
+      name: data.name,
+      slug: data.slug,
+      description: data.description || undefined,
+    });
+  };
 
   const tagsQuery = useQuery({
     queryKey: ["tags"],
@@ -94,6 +108,7 @@ export default function TagsPage() {
           action={
             isAdmin ? (
               <button
+                onClick={() => setCreateOpen(true)}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -135,6 +150,7 @@ export default function TagsPage() {
         action={
           isAdmin ? (
             <button
+              onClick={() => setCreateOpen(true)}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -280,6 +296,13 @@ export default function TagsPage() {
           })}
         </div>
       )}
+
+      <TagFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSubmit={handleCreate}
+        isSubmitting={createMutation.isPending}
+      />
     </div>
   );
 }

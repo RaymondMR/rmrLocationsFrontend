@@ -1,20 +1,60 @@
-import { useParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Map, MapPin, Star, Tag } from "lucide-react";
+import { toast } from "sonner";
+import { Map, MapPin, Star, Tag, Edit3, Trash2 } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
 import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import EmptyState from "@/components/shared/EmptyState";
 import ErrorState from "@/components/shared/ErrorState";
+import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import Breadcrumbs from "@/components/layout/Breadcrumbs";
+import TagFormDialog from "@/components/tags/TagFormDialog";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { useAuthStore } from "@/stores/auth-store";
+import { useUpdateTag, useDeleteTag } from "@/hooks/use-tags";
 import type { Tag as TagType, Location, PagedResult } from "@/types/models";
+import type { TagFormData } from "@/types/forms";
 
 /* ────────────────────────────────────────────── */
 /*  TagDetailPage                                 */
 /* ────────────────────────────────────────────── */
 export default function TagDetailPage() {
   const { id } = useParams<{ id: string }>();
+
+  const { roles } = useAuthStore();
+  const isAdmin = roles.includes("Admin");
+  const navigate = useNavigate();
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const updateMutation = useUpdateTag();
+  const deleteMutation = useDeleteTag();
+
+  const handleEdit = async (data: TagFormData) => {
+    if (!id) return;
+    try {
+      await updateMutation.mutateAsync({
+        id,
+        name: data.name,
+        slug: data.slug,
+        description: data.description || undefined,
+      });
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id) return;
+    try {
+      await deleteMutation.mutateAsync(id);
+      navigate("/tags", { replace: true });
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    }
+  };
 
   const tagQuery = useQuery({
     queryKey: ["tags", id],
@@ -190,6 +230,70 @@ export default function TagDetailPage() {
           <Map size={16} />
           Ver en el mapa
         </Link>
+
+        {isAdmin && (
+          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+            <button
+              onClick={() => setEditOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "10px 16px",
+                borderRadius: "8px",
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                color: "var(--ink)",
+                cursor: "pointer",
+                fontFamily: "var(--sans)",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--background)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "var(--surface)";
+              }}
+            >
+              <Edit3 size={15} />
+              Editar
+            </button>
+            <button
+              onClick={() => setDeleteOpen(true)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.35rem",
+                padding: "10px 16px",
+                borderRadius: "8px",
+                border: "1px solid var(--danger)",
+                background: "transparent",
+                color: "var(--danger)",
+                cursor: "pointer",
+                fontFamily: "var(--sans)",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background =
+                  "color-mix(in srgb, var(--danger) 10%, transparent)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "transparent";
+              }}
+            >
+              <Trash2 size={15} />
+              Eliminar
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Locations using this tag ──────────── */}
@@ -332,6 +436,23 @@ export default function TagDetailPage() {
           ))}
         </div>
       )}
+
+      <TagFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        initial={tag}
+        onSubmit={handleEdit}
+        isSubmitting={updateMutation.isPending}
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Eliminar tag"
+        description="Esta accion no se puede deshacer. El tag se eliminara permanentemente."
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Layers, Plus, Utensils } from "lucide-react";
 import PageHeader from "@/components/shared/PageHeader";
@@ -42,6 +42,7 @@ function buildCategoryTree(categories: Category[]): Category[] {
 export default function CategoriesPage() {
   const { roles } = useAuthStore();
   const isAdmin = roles.includes("Admin");
+  const navigate = useNavigate();
 
   const categoriesQuery = useQuery({
     queryKey: ["categories"],
@@ -102,6 +103,14 @@ export default function CategoriesPage() {
           icon={<Layers size={28} />}
           title="Sin categorias"
           description="Aun no hay categorias disponibles."
+          action={
+            isAdmin
+              ? {
+                  label: "Nueva categoria",
+                  onClick: () => navigate("/categories/new"),
+                }
+              : undefined
+          }
         />
       </div>
     );
@@ -117,7 +126,8 @@ export default function CategoriesPage() {
         subtitle="Explora lugares por categoria"
         action={
           isAdmin ? (
-            <button
+            <Link
+              to="/categories/new"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -132,6 +142,7 @@ export default function CategoriesPage() {
                 fontSize: "0.85rem",
                 fontWeight: 600,
                 transition: "opacity 0.15s",
+                textDecoration: "none",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.opacity = "0.9";
@@ -142,7 +153,7 @@ export default function CategoriesPage() {
             >
               <Plus size={16} />
               Nueva categoria
-            </button>
+            </Link>
           ) : undefined
         }
       />

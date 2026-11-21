@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -16,6 +17,9 @@ import ErrorState from "@/components/shared/ErrorState";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
 import { useAuthStore } from "@/stores/auth-store";
+import CollectionFormDialog from "@/components/collections/CollectionFormDialog";
+import { useCreateCollection } from "@/hooks/use-collections";
+import type { CollectionFormData } from "@/types/forms";
 import type { LocationCollection } from "@/types/models";
 
 /* ────────────────────────────────────────────── */
@@ -51,6 +55,17 @@ const visibilityConfig: Record<
 export default function CollectionsPage() {
   const navigate = useNavigate();
   const { userId } = useAuthStore();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const createMutation = useCreateCollection();
+
+  const handleCreate = async (data: CollectionFormData) => {
+    await createMutation.mutateAsync({
+      name: data.name,
+      description: data.description || undefined,
+      visibility: data.visibility,
+    });
+  };
 
   const collectionsQuery = useQuery({
     queryKey: ["collections", userId],
@@ -108,6 +123,7 @@ export default function CollectionsPage() {
           subtitle="Guarda tus lugares favoritos en colecciones"
           action={
             <button
+              onClick={() => setCreateOpen(true)}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -147,6 +163,7 @@ export default function CollectionsPage() {
         subtitle="Guarda tus lugares favoritos en colecciones"
         action={
           <button
+            onClick={() => setCreateOpen(true)}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -290,6 +307,13 @@ export default function CollectionsPage() {
           );
         })}
       </div>
+
+      <CollectionFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onSubmit={handleCreate}
+        isSubmitting={createMutation.isPending}
+      />
     </div>
   );
 }
