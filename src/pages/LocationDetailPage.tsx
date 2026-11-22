@@ -21,6 +21,7 @@ import Breadcrumbs from "@/components/layout/Breadcrumbs";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import LocationPickerLazy from "@/components/locations/LocationPickerLazy";
 import OpeningHoursDisplay from "@/components/locations/OpeningHoursDisplay";
+import MapActions from "@/components/locations/MapActions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
@@ -428,6 +429,11 @@ export default function LocationDetailPage() {
           )}
         </div>
       </div>
+
+      {/* ── Google Maps: abrir el lugar / copiar el enlace para WhatsApp ──
+          Fila propia a todo el ancho: dentro de la columna del título (que cede espacio a los botones
+          de Guardar/Compartir) los botones se estrechaban en móvil. */}
+      <MapActions latitude={loc.latitude} longitude={loc.longitude} />
 
       {/* ── Category chips + Rating + Status ──── */}
       <div

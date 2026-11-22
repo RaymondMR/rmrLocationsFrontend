@@ -40,6 +40,22 @@ export function formatCoordinates(lat: number, lng: number): string {
   return `${Math.abs(lat).toFixed(4)}° ${latDir} · ${Math.abs(lng).toFixed(4)}° ${lngDir}`;
 }
 
+/**
+ * Enlace de Google Maps que marca un punto: `https://www.google.com/maps/?q={lat},{lng}&z=20&hl=es`
+ * (z=20: máximo acercamiento; hl=es: interfaz en español). Es el que abre «Abrir en Google Maps» y el
+ * que se copia para compartir el lugar por WhatsApp. Las coordenadas van con toda su precisión y con
+ * punto decimal, sin redondear.
+ */
+export function googleMapsUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/?q=${plainDecimal(lat)},${plainDecimal(lng)}&z=20&hl=es`;
+}
+
+/** String(n) pero sin notación científica: Google Maps no entiende `1e-7` en el parámetro q. */
+function plainDecimal(value: number): string {
+  const text = String(value);
+  return /e/i.test(text) ? value.toFixed(10).replace(/\.?0+$/, "") : text;
+}
+
 /** Degradación del mapa para dark mode: filtro CSS */
 export const DARK_MAP_FILTER =
   "brightness(0.85) contrast(1.05)";
