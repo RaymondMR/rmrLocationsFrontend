@@ -18,8 +18,10 @@ import LoadingSkeleton from "@/components/shared/LoadingSkeleton";
 import EmptyState from "@/components/shared/EmptyState";
 import ErrorState from "@/components/shared/ErrorState";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { formatDate } from "@/lib/slug";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
@@ -87,13 +89,17 @@ export default function AdminDashboardPage() {
   });
 
   /* ── Soft delete mutation ─────────────────── */
+  // POST /soft-delete (baja con cascada: reseñas, medios, vínculos y contador de tags) en vez de DELETE,
+  // que solo marcaba el lugar. Antes tampoco avisaba del resultado.
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`/api/location/${id}`),
+    mutationFn: (id: string) => api.post(`/api/location/${id}/soft-delete`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "locations"] });
       queryClient.invalidateQueries({ queryKey: ["locations"] });
       setDeleteTarget(null);
+      toast.success("Lugar eliminado");
     },
+    onError: (e) => toast.error(getApiErrorMessage(e, "write")),
   });
 
   const handleDelete = useCallback(() => {

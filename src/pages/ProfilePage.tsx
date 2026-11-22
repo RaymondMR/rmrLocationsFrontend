@@ -210,7 +210,9 @@ export default function ProfilePage() {
   } = useQuery<Location[]>({
     queryKey: ["locations", { ownerId: userId }],
     queryFn: async () => {
-      const { data } = await api.get("/api/locations", {
+      // La ruta es /api/location (singular): con /api/locations daba 404 y «Mis lugares» siempre fallaba.
+      // El filtro ownerId lo aplica el backend, que además respeta la visibilidad (el dueño ve sus borradores).
+      const { data } = await api.get("/api/location", {
         params: { ownerId: userId, pageSize: 100 },
       });
       // Handle both array and paged result

@@ -25,6 +25,7 @@ export default function TagsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const createMutation = useCreateTag();
 
+  // Si el alta falla, TagFormDialog muestra el error y se queda abierto para reintentar.
   const handleCreate = async (data: TagFormData) => {
     await createMutation.mutateAsync({
       name: data.name,
@@ -72,6 +73,43 @@ export default function TagsPage() {
     lg: { padding: "8px 18px", fontSize: "0.95rem" },
   };
 
+  /* ── Alta de tags (solo Admin) ────────────── */
+  // El botón y el diálogo se definen UNA vez y se usan en las dos ramas con datos (lista vacía y lista
+  // con tags). El diálogo tiene que estar montado también con la lista vacía: antes solo se montaba
+  // junto a la lista, así que sin ningún tag «Nuevo tag» ponía open=true en un diálogo que no existía
+  // y no se podía crear el primero.
+  const createButton = isAdmin ? (
+    <button
+      onClick={() => setCreateOpen(true)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35rem",
+        padding: "9px 16px",
+        borderRadius: "8px",
+        border: "none",
+        background: "var(--primary)",
+        color: "#fff",
+        cursor: "pointer",
+        fontFamily: "var(--sans)",
+        fontSize: "0.85rem",
+        fontWeight: 600,
+      }}
+    >
+      <Plus size={16} />
+      Nuevo tag
+    </button>
+  ) : undefined;
+
+  const createDialog = (
+    <TagFormDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSubmit={handleCreate}
+      isSubmitting={createMutation.isPending}
+    />
+  );
+
   /* ══════════════════════════════════════════════ */
   /*  STATES                                       */
   /* ══════════════════════════════════════════════ */
@@ -105,36 +143,14 @@ export default function TagsPage() {
         <PageHeader
           title="Tags"
           subtitle="Etiquetas para clasificar lugares"
-          action={
-            isAdmin ? (
-              <button
-                onClick={() => setCreateOpen(true)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.35rem",
-                  padding: "9px 16px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "var(--primary)",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontFamily: "var(--sans)",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                }}
-              >
-                <Plus size={16} />
-                Nuevo tag
-              </button>
-            ) : undefined
-          }
+          action={createButton}
         />
         <EmptyState
           icon={<Tag size={28} />}
           title="Sin tags"
           description="Aun no hay tags disponibles."
         />
+        {createDialog}
       </div>
     );
   }
@@ -147,30 +163,7 @@ export default function TagsPage() {
       <PageHeader
         title="Tags"
         subtitle="Etiquetas para clasificar lugares"
-        action={
-          isAdmin ? (
-            <button
-              onClick={() => setCreateOpen(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                padding: "9px 16px",
-                borderRadius: "8px",
-                border: "none",
-                background: "var(--primary)",
-                color: "#fff",
-                cursor: "pointer",
-                fontFamily: "var(--sans)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-              }}
-            >
-              <Plus size={16} />
-              Nuevo tag
-            </button>
-          ) : undefined
-        }
+        action={createButton}
       />
 
       {/* ── Local search filter ──────────────── */}
@@ -297,12 +290,7 @@ export default function TagsPage() {
         </div>
       )}
 
-      <TagFormDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSubmit={handleCreate}
-        isSubmitting={createMutation.isPending}
-      />
+      {createDialog}
     </div>
   );
 }

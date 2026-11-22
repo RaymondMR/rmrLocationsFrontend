@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { toast } from "sonner";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,6 +8,7 @@ import StarRating from "./StarRating";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { reviewSchema, type ReviewFormData } from "@/types/forms";
+import { getApiErrorMessage } from "@/lib/api-error";
 import type { Review } from "@/types/models";
 
 interface ReviewFormDialogProps {
@@ -14,6 +17,16 @@ interface ReviewFormDialogProps {
   onSubmit: (data: ReviewFormData) => Promise<void>;
   existingReview?: Review | null;
   isSubmitting?: boolean;
+}
+
+function toFormValues(review?: Review | null): ReviewFormData {
+  return {
+    rating: review?.rating ?? 5,
+    title: review?.title ?? "",
+    body: review?.body ?? "",
+    // <input type="date"> solo acepta yyyy-MM-dd; la API puede devolver también la hora.
+    visitedOn: review?.visitedOn?.slice(0, 10) ?? "",
+  };
 }
 
 export default function ReviewFormDialog({
@@ -27,16 +40,18 @@ export default function ReviewFormDialog({
     register,
     handleSubmit,
     control,
+    reset,
     formState: { errors },
   } = useForm<ReviewFormData>({
     resolver: zodResolver(reviewSchema),
-    defaultValues: {
-      rating: existingReview?.rating ?? 5,
-      title: existingReview?.title ?? "",
-      body: existingReview?.body ?? "",
-      visitedOn: existingReview?.visitedOn ?? "",
-    },
+    defaultValues: toFormValues(existingReview),
   });
+
+  // La misma instancia sirve para crear y editar: sin este reset, al reabrir el diálogo se veían los
+  // valores de la vez anterior (o los de otra reseña) porque defaultValues solo cuenta al montar.
+  useEffect(() => {
+    if (open) reset(toFormValues(existingReview));
+  }, [open, existingReview, reset]);
 
   const isEdit = !!existingReview;
 
@@ -49,8 +64,13 @@ export default function ReviewFormDialog({
     >
       <form
         onSubmit={handleSubmit(async (data) => {
-          await onSubmit(data);
-          onOpenChange(false);
+          try {
+            await onSubmit(data);
+            onOpenChange(false);
+          } catch (e) {
+            // Se queda abierto para corregir y reintentar (p. ej. 409 si ya existe tu reseña).
+            toast.error(getApiErrorMessage(e, "write"));
+          }
         })}
         className="flex flex-col gap-4"
       >

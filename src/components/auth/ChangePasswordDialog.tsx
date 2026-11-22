@@ -68,11 +68,14 @@ export default function ChangePasswordDialog({
     } catch (error: unknown) {
       const axiosError = error as { response?: { status?: number; data?: { detail?: string; title?: string } } };
       if (axiosError.response?.status === 400) {
-        const msg =
-          axiosError.response.data?.detail ||
-          axiosError.response.data?.title ||
-          "Datos invalidos. Revisa los campos e intenta de nuevo.";
-        setServerError(msg);
+        // El backend responde 400 con TEXTO PLANO ("Invalid current password or user not found."), no con
+        // ProblemDetails: leer detail/title daba undefined y siempre salía el mensaje genérico.
+        const data = axiosError.response.data as unknown;
+        setServerError(
+          typeof data === "string" && /current password/i.test(data)
+            ? "La contrasena actual no es correcta."
+            : getApiErrorMessage(error),
+        );
       } else {
         toast.error(getApiErrorMessage(error));
       }

@@ -5,7 +5,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import { collectionSchema, type CollectionFormData } from "@/types/forms";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { Lock, Link2, Globe } from "lucide-react";
 import type { LocationCollection } from "@/types/models";
 
@@ -93,8 +95,14 @@ export default function CollectionFormDialog({
     >
       <form
         onSubmit={handleSubmit(async (data) => {
-          await onSubmit(data);
-          onOpenChange(false);
+          try {
+            await onSubmit(data);
+            onOpenChange(false);
+          } catch (e) {
+            // Se queda abierto para corregir y reintentar. Sin esto un error del servidor (403, 409,
+            // 500…) se perdía en silencio y el botón parecía no hacer nada.
+            toast.error(getApiErrorMessage(e, "write"));
+          }
         })}
         className="flex flex-col gap-4"
       >

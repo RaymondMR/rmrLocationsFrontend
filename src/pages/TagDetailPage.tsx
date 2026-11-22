@@ -32,18 +32,16 @@ export default function TagDetailPage() {
   const updateMutation = useUpdateTag();
   const deleteMutation = useDeleteTag();
 
+  // Si falla, TagFormDialog muestra el error y se queda abierto (antes se atrapaba aquí y el diálogo
+  // se cerraba como si la edición hubiera ido bien).
   const handleEdit = async (data: TagFormData) => {
     if (!id) return;
-    try {
-      await updateMutation.mutateAsync({
-        id,
-        name: data.name,
-        slug: data.slug,
-        description: data.description || undefined,
-      });
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
+    await updateMutation.mutateAsync({
+      id,
+      name: data.name,
+      slug: data.slug,
+      description: data.description || undefined,
+    });
   };
 
   const handleDelete = async () => {

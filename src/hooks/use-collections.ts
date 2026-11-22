@@ -3,6 +3,7 @@ import api from "@/lib/axios";
 import type { LocationCollection } from "@/types/models";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 export function useUserCollections() {
   const userId = useAuthStore((s) => s.userId);
@@ -104,6 +105,9 @@ export function useAddToCollection() {
       qc.invalidateQueries({ queryKey: ["collections", "detail"] });
       toast.success("Guardado en la colección");
     },
+    // Se llama con .mutate() (sin await): sin esto un fallo (colección ajena, lugar oculto, ya incluido…)
+    // no avisaba de nada.
+    onError: (e) => toast.error(getApiErrorMessage(e, "write")),
   });
 }
 
@@ -125,5 +129,6 @@ export function useRemoveFromCollection() {
       qc.invalidateQueries({ queryKey: ["collections", "detail"] });
       toast.success("Quitado de la colección");
     },
+    onError: (e) => toast.error(getApiErrorMessage(e, "write")),
   });
 }

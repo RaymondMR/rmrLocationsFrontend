@@ -5,8 +5,10 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { tagSchema, type TagFormData } from "@/types/forms";
 import { slugify } from "@/lib/slug";
+import { getApiErrorMessage } from "@/lib/api-error";
 import type { Tag } from "@/types/models";
 
 interface TagFormDialogProps {
@@ -84,8 +86,14 @@ export default function TagFormDialog({
     >
       <form
         onSubmit={handleSubmit(async (data) => {
-          await onSubmit(data);
-          onOpenChange(false);
+          try {
+            await onSubmit(data);
+            onOpenChange(false);
+          } catch (e) {
+            // Se queda abierto para corregir y reintentar. Sin esto un error del servidor (403, 409 por
+            // slug repetido, 500…) se perdía en silencio y el botón parecía no hacer nada.
+            toast.error(getApiErrorMessage(e, "write"));
+          }
         })}
         className="flex flex-col gap-4"
       >

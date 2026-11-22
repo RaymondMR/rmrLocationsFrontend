@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Star,
   MapPin,
@@ -21,12 +21,15 @@ import Breadcrumbs from "@/components/layout/Breadcrumbs";
 import ConfirmDialog from "@/components/shared/ConfirmDialog";
 import LocationPickerLazy from "@/components/locations/LocationPickerLazy";
 import OpeningHoursDisplay from "@/components/locations/OpeningHoursDisplay";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { useAuthStore } from "@/stores/auth-store";
 import { formatCoordinates, formatDistance } from "@/lib/geo";
-import { formatDate } from "@/lib/slug";
 import type { Location, Review, OpeningHour } from "@/types/models";
+import ReviewsSection from "@/components/reviews/ReviewsSection";
+import MediaSection from "@/components/media/MediaSection";
 import AddToCollectionDialog from "@/components/collections/AddToCollectionDialog";
 import CollectionFormDialog from "@/components/collections/CollectionFormDialog";
 import {
@@ -47,12 +50,9 @@ export default function LocationDetailPage() {
   // quién pregunta: se espera a que el bootstrap resuelva la sesión para que la primera petición ya
   // lleve el token (si no, el dueño recibiría 404 al recargar la página de su propio lugar).
   const authReady = authStatus !== "loading";
+  const queryClient = useQueryClient();
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  const isOwnerOrAdmin =
-    !!userId &&
-    (roles.includes("Admin") || roles.includes("Owner"));
 
   /* ── Save-to-collection state + queries ──── */
   const [saveOpen, setSaveOpen] = useState(false);
@@ -110,12 +110,22 @@ export default function LocationDetailPage() {
     staleTime: 60_000,
   });
 
-  /* ── Delete mutation ──────────────────────── */
+  /* ── Delete mutation (borrado lógico con cascada) ── */
+  // POST /soft-delete y no DELETE: en una transacción da de baja el lugar y sus reseñas y medios, y limpia
+  // sus vínculos (colecciones, categorías, tags y contador de uso). El DELETE solo marcaba el lugar y
+  // dejaba esas filas huérfanas. Antes tampoco refrescaba los listados ni avisaba si fallaba.
   const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/api/location/${id}`),
+    mutationFn: () => api.post(`/api/location/${id}/soft-delete`),
     onSuccess: () => {
+      // Todos los listados salvo el detalle de ESTE lugar: ya no existe y pedirlo daría 404.
+      queryClient.invalidateQueries({
+        queryKey: ["locations"],
+        predicate: (q) => q.queryKey[1] !== id,
+      });
+      toast.success("Lugar eliminado");
       navigate("/locations", { replace: true });
     },
+    onError: (e) => toast.error(getApiErrorMessage(e, "write")),
   });
 
   /* ── Handlers ─────────────────────────────── */
@@ -176,6 +186,10 @@ export default function LocationDetailPage() {
 
   const loc = locationQuery.data!;
   const reviews = reviewsQuery.data ?? [];
+  // Dueño del lugar o Admin: son quienes el backend deja editar, eliminar y gestionar fotos. Antes se
+  // comparaba el rol con "Owner", que no existe, y el dueño (rol User) no veía el menú de su propio lugar.
+  const isOwnerOrAdmin =
+    !!userId && (roles.includes("Admin") || loc.ownerId === userId);
   const primaryCat = loc.locationCategories?.find((lc) => lc.isPrimary)
     ?.category;
 
@@ -524,6 +538,13 @@ export default function LocationDetailPage() {
       >
         {/* ════ LEFT COLUMN ════════════════════ */}
         <div>
+          {/* Fotos y videos: galería para todos; alta, edición y baja para el dueño o un Admin */}
+          <MediaSection
+            locationId={loc.id}
+            media={loc.media ?? []}
+            canManage={isOwnerOrAdmin}
+          />
+
           {/* Description */}
           <section style={{ marginBottom: "2rem" }}>
             <h2
@@ -550,155 +571,14 @@ export default function LocationDetailPage() {
             </p>
           </section>
 
-          {/* Reviews section */}
-          <section>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: "1rem",
-              }}
-            >
-              <h2
-                style={{
-                  fontFamily: "var(--display)",
-                  fontSize: "1.15rem",
-                  fontWeight: 700,
-                  color: "var(--ink)",
-                  margin: 0,
-                }}
-              >
-                Resenas ({reviews.length})
-              </h2>
-            </div>
-
-            {reviewsQuery.isLoading && <LoadingSkeleton variant="text" count={3} />}
-
-            {reviewsQuery.isError && (
-              <ErrorState
-                message="No pudimos cargar las resenas"
-                onRetry={() => reviewsQuery.refetch()}
-              />
-            )}
-
-            {reviewsQuery.isSuccess && reviews.length === 0 && (
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "var(--ink-muted)",
-                  fontStyle: "italic",
-                  margin: 0,
-                }}
-              >
-                Aun no hay resenas para este lugar. Se el primero en opinar.
-              </p>
-            )}
-
-            {reviews.length > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1rem",
-                }}
-              >
-                {reviews.map((rev) => (
-                  <div
-                    key={rev.id}
-                    style={{
-                      padding: "1rem",
-                      borderRadius: "10px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        marginBottom: "0.5rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            fontSize: "0.85rem",
-                            color: "var(--ink)",
-                          }}
-                        >
-                          {rev.user?.displayName ?? "Anonimo"}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "var(--ink-muted)",
-                          }}
-                        >
-                          {rev.visitedOn
-                            ? formatDate(rev.visitedOn)
-                            : ""}
-                        </span>
-                      </div>
-                      {/* Rating stars */}
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "2px",
-                        }}
-                      >
-                        {Array.from({ length: 5 }, (_, i) => (
-                          <Star
-                            key={i}
-                            size={12}
-                            style={{
-                              color: "var(--rating)",
-                              fill:
-                                i < rev.rating
-                                  ? "var(--rating)"
-                                  : "transparent",
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                    {rev.title && (
-                      <h4
-                        style={{
-                          margin: "0 0 0.35rem 0",
-                          fontSize: "0.9rem",
-                          fontWeight: 600,
-                          color: "var(--ink)",
-                        }}
-                      >
-                        {rev.title}
-                      </h4>
-                    )}
-                    {rev.body && (
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.85rem",
-                          color: "var(--ink-muted)",
-                          lineHeight: 1.6,
-                        }}
-                      >
-                        {rev.body}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+          {/* Reseñas: lista + alta, edición y baja (una por usuario y lugar) */}
+          <ReviewsSection
+            locationId={loc.id}
+            reviews={reviews}
+            isLoading={reviewsQuery.isLoading}
+            isError={reviewsQuery.isError}
+            onRetry={() => reviewsQuery.refetch()}
+          />
         </div>
 
         {/* ════ RIGHT COLUMN ════════════════════ */}

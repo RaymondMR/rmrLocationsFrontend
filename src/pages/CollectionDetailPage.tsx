@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bookmark,
   Globe,
@@ -24,7 +24,7 @@ import api from "@/lib/axios";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "sonner";
 import CollectionFormDialog from "@/components/collections/CollectionFormDialog";
-import { useUpdateCollection, useRemoveFromCollection } from "@/hooks/use-collections";
+import { useUpdateCollection, useDeleteCollection, useRemoveFromCollection } from "@/hooks/use-collections";
 import { getApiErrorMessage } from "@/lib/api-error";
 import type { LocationCollection } from "@/types/models";
 import type { CollectionFormData } from "@/types/forms";
@@ -68,18 +68,16 @@ export default function CollectionDetailPage() {
   const updateMutation = useUpdateCollection();
   const removeMutation = useRemoveFromCollection();
 
+  // Si falla, CollectionFormDialog muestra el error y se queda abierto (antes se atrapaba aquí y el
+  // diálogo se cerraba como si la edición hubiera ido bien).
   const handleEdit = async (data: CollectionFormData) => {
     if (!id) return;
-    try {
-      await updateMutation.mutateAsync({
-        id,
-        name: data.name,
-        description: data.description || undefined,
-        visibility: data.visibility,
-      });
-    } catch (e) {
-      toast.error(getApiErrorMessage(e));
-    }
+    await updateMutation.mutateAsync({
+      id,
+      name: data.name,
+      description: data.description || undefined,
+      visibility: data.visibility,
+    });
   };
 
   const collectionQuery = useQuery({
@@ -98,16 +96,20 @@ export default function CollectionDetailPage() {
     collectionQuery.data?.ownerId === userId;
 
   /* ── Delete mutation (soft delete) ────────── */
-  const deleteMutation = useMutation({
-    mutationFn: () => api.delete(`/api/collection/${id}`),
-    onSuccess: () => {
-      navigate("/collections", { replace: true });
-    },
-  });
+  // useDeleteCollection invalida la lista de colecciones y avisa con un toast. Antes se borraba con una
+  // mutación local que no invalidaba nada: la lista seguía mostrando la colección eliminada hasta 30 s
+  // (staleTime) y, si el borrado fallaba, no se avisaba de nada.
+  const deleteMutation = useDeleteCollection();
 
-  const handleDelete = useCallback(() => {
-    deleteMutation.mutate();
-  }, [deleteMutation]);
+  const handleDelete = async () => {
+    if (!id) return;
+    try {
+      await deleteMutation.mutateAsync(id);
+      navigate("/collections", { replace: true });
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, "write"));
+    }
+  };
 
   const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href);

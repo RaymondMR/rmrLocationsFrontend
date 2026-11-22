@@ -59,6 +59,7 @@ export default function CollectionsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const createMutation = useCreateCollection();
 
+  // Si el alta falla, CollectionFormDialog muestra el error y se queda abierto para reintentar.
   const handleCreate = async (data: CollectionFormData) => {
     await createMutation.mutateAsync({
       name: data.name,
@@ -76,6 +77,50 @@ export default function CollectionsPage() {
     enabled: !!userId,
     staleTime: 30_000,
   });
+
+  /* ── Alta de colecciones ──────────────────── */
+  // El botón y el diálogo se definen UNA vez y se usan en las dos ramas con datos (sin colecciones y con
+  // colecciones). El diálogo tiene que estar montado también en el estado vacío: antes solo se montaba
+  // junto a la lista, así que con cero colecciones «Nueva coleccion» ponía open=true en un diálogo que
+  // no existía y era imposible crear la primera.
+  const createButton = (
+    <button
+      onClick={() => setCreateOpen(true)}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.35rem",
+        padding: "9px 16px",
+        borderRadius: "8px",
+        border: "none",
+        background: "var(--primary)",
+        color: "#fff",
+        cursor: "pointer",
+        fontFamily: "var(--sans)",
+        fontSize: "0.85rem",
+        fontWeight: 600,
+        transition: "opacity 0.15s",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLElement).style.opacity = "0.9";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.opacity = "1";
+      }}
+    >
+      <Plus size={16} />
+      Nueva coleccion
+    </button>
+  );
+
+  const createDialog = (
+    <CollectionFormDialog
+      open={createOpen}
+      onOpenChange={setCreateOpen}
+      onSubmit={handleCreate}
+      isSubmitting={createMutation.isPending}
+    />
+  );
 
   /* ══════════════════════════════════════════════ */
   /*  STATES                                       */
@@ -121,34 +166,14 @@ export default function CollectionsPage() {
         <PageHeader
           title="Mis colecciones"
           subtitle="Guarda tus lugares favoritos en colecciones"
-          action={
-            <button
-              onClick={() => setCreateOpen(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                padding: "9px 16px",
-                borderRadius: "8px",
-                border: "none",
-                background: "var(--primary)",
-                color: "#fff",
-                cursor: "pointer",
-                fontFamily: "var(--sans)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-              }}
-            >
-              <Plus size={16} />
-              Nueva coleccion
-            </button>
-          }
+          action={createButton}
         />
         <EmptyState
           icon={<Bookmark size={28} />}
           title="Crea tu primera coleccion"
           description="Guarda lugares que te gusten y organizalos como quieras."
         />
+        {createDialog}
       </div>
     );
   }
@@ -161,35 +186,7 @@ export default function CollectionsPage() {
       <PageHeader
         title="Mis colecciones"
         subtitle="Guarda tus lugares favoritos en colecciones"
-        action={
-          <button
-            onClick={() => setCreateOpen(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.35rem",
-              padding: "9px 16px",
-              borderRadius: "8px",
-              border: "none",
-              background: "var(--primary)",
-              color: "#fff",
-              cursor: "pointer",
-              fontFamily: "var(--sans)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              transition: "opacity 0.15s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.opacity = "0.9";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.opacity = "1";
-            }}
-          >
-            <Plus size={16} />
-            Nueva coleccion
-          </button>
-        }
+        action={createButton}
       />
 
       <div
@@ -308,12 +305,7 @@ export default function CollectionsPage() {
         })}
       </div>
 
-      <CollectionFormDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSubmit={handleCreate}
-        isSubmitting={createMutation.isPending}
-      />
+      {createDialog}
     </div>
   );
 }

@@ -179,13 +179,26 @@ export const collectionSchema = z.object({
   visibility: z.enum(["Private", "Unlisted", "Public"]),
 });
 
+// Medios de un lugar (MediaFormDialog). Solo URLs http(s): la dirección se pinta en <img src> y se guarda
+// tal cual; con z.string().url() valía cualquier esquema (javascript:, data:, ftp:…).
 export const mediaSchema = z.object({
-  url: z.string().url("URL inválida").max(2048),
-  thumbnailUrl: z.string().url().max(2048).optional().or(z.literal("")),
-  caption: z.string().max(300).optional().or(z.literal("")),
+  url: z
+    .string()
+    .trim()
+    .min(1, "La URL es obligatoria")
+    .max(2048, "Máximo 2048 caracteres")
+    .refine(isHttpUrl, "URL inválida: debe empezar con http:// o https://"),
+  thumbnailUrl: z
+    .string()
+    .max(2048, "Máximo 2048 caracteres")
+    .refine((v) => v.trim() === "" || isHttpUrl(v.trim()), "URL inválida: debe empezar con http:// o https://"),
+  caption: z.string().max(300, "Máximo 300 caracteres"),
   type: z.enum(["Image", "Video"]),
   isCover: z.boolean(),
-  sortOrder: z.number().int().min(0),
+  sortOrder: z
+    .number({ message: "Escribe un número entero" })
+    .int("Debe ser un número entero")
+    .min(0, "No puede ser negativo"),
 });
 
 export type LoginFormData = z.infer<typeof loginSchema>;

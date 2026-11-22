@@ -33,6 +33,9 @@ export default function MediaGallery({ media }: MediaGalleryProps) {
   const cover =
     media.find((m) => m.isCover) || media[0];
   const rest = media.filter((m) => m.id !== cover.id);
+  // El visor recorre [portada, ...resto], el mismo orden en que se muestran la portada y las miniaturas.
+  // Antes usaba el índice sobre `media` tal cual, y si la portada no era la primera mostraba otra imagen.
+  const slides = [cover, ...rest];
 
   return (
     <>
@@ -126,7 +129,7 @@ export default function MediaGallery({ media }: MediaGalleryProps) {
               ‹
             </button>
           )}
-          {lightboxIdx < media.length - 1 && (
+          {lightboxIdx < slides.length - 1 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -138,12 +141,25 @@ export default function MediaGallery({ media }: MediaGalleryProps) {
               ›
             </button>
           )}
-          <img
-            src={media[lightboxIdx].url}
-            alt={media[lightboxIdx].caption || ""}
-            className="max-w-full max-h-[85vh] object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {slides[lightboxIdx].type === "Video" ? (
+            // Un <img> no reproduce video (y la URL puede ser de YouTube, etc.): se abre en una pestaña nueva.
+            <a
+              href={slides[lightboxIdx].url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white underline text-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Abrir video ↗
+            </a>
+          ) : (
+            <img
+              src={slides[lightboxIdx].url}
+              alt={slides[lightboxIdx].caption || ""}
+              className="max-w-full max-h-[85vh] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>
       )}
     </>
